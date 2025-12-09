@@ -6,6 +6,22 @@ A human-friendly configuration format designed to be more pleasant to write and 
 
 ---
 
+## Table of Contents
+
+1. [Values](#1-values)
+2. [Comments](#2-comments)
+3. [Whitespace](#3-whitespace)
+4. [Top-Level Values](#4-top-level-values)
+5. [Example Document](#5-example-document)
+6. [Serde Integration](#6-serde-integration)
+7. [Comparison with JSON](#7-comparison-with-json)
+8. [Limitations](#8-limitations)
+9. [Error Reporting](#9-error-reporting)
+10. [Use Cases](#10-use-cases)
+11. [Version History](#11-version-history)
+
+---
+
 ## 1. Values
 
 COSY supports the following value types:
@@ -187,7 +203,88 @@ A COSY document must consist of a single value (which may be an object or array)
 
 ---
 
-## 6. Comparison with JSON
+## 6. Serde Integration
+
+COSY has **first-class Serde support** via `cosy::serde_support`, allowing you to deserialize COSY directly into Rust structs and serialize structs back to COSY.
+
+### Basic Usage
+
+```rust
+use serde::{Deserialize, Serialize};
+use cosy::serde_support;
+
+#[derive(Serialize, Deserialize)]
+struct Config {
+    name: String,
+    port: u16,
+    debug: bool,
+}
+
+let cosy_text = r#"{
+    name: "MyApp"
+    port: 8080
+    debug: true
+}"#;
+
+// Deserialize
+let config: Config = serde_support::from_str(cosy_text)?;
+
+// Serialize
+let serialized = serde_support::to_string(&config)?;
+println!("{}", serialized);
+```
+
+### Supported Types
+
+- **Primitives**: `bool`, `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`
+- **Strings**: `String`, `&str`
+- **Collections**: `Vec<T>`, `HashMap<String, T>` (string keys only)
+- **Structs**: Any struct with `#[derive(Serialize, Deserialize)]`
+- **Enums**: **Unit variants** (`Active`) and **newtype variants** (`Value(String)`) only
+- **Options**: `Option<T>` (None serializes to `null`)
+
+### Enum Support
+
+Only **unit** and **newtype** variants are supported for configuration use cases:
+
+```rust
+#[derive(Serialize, Deserialize)]
+enum Status {
+    Active,      // ✓ Unit variant
+    Inactive,    // ✓ Unit variant
+    Pending,     // ✓ Unit variant
+}
+
+#[derive(Serialize, Deserialize)]
+enum Value {
+    Number(i32),   // ✓ Newtype variant
+    Text(String),  // ✓ Newtype variant
+}
+
+// ✗ NOT supported:
+// Tuple(i32, String)              - tuple variants
+// Struct { a: i32, b: String }    - struct variants
+```
+
+### Important Limitations
+
+1. **Enums**: Only unit and newtype variants work. Tuple and struct variants will error during deserialization with a message like "tuple variants not supported; use newtype or unit variants".
+
+2. **Map Keys**: Only `String` keys are supported. Attempting to use non-string keys will fail with "keys must be strings".
+
+3. **Object Key Order**: Key order in objects is **not preserved** (unordered HashMap behavior). Roundtrip serialization will not maintain the original key order.
+
+4. **Comments**: Comments in the original COSY are stripped during parsing. Roundtrip serialization will not preserve comments.
+
+5. **Number Precision**:
+   - Integers are stored as `i64` (64-bit signed). Large unsigned integers beyond `i64::MAX` will lose precision.
+   - Floats are stored as `f64` (IEEE 754). Values are limited to ~15 significant digits.
+
+6. **Custom Serialization**: Serde's `#[serde(rename)]`, `#[serde(skip)]`, and other attributes are fully supported, allowing fine-grained control over serialization.
+
+---
+
+## 7. Comparison with JSON
 
 | Feature | JSON | COSY |
 |---------|------|------|
@@ -200,10 +297,34 @@ A COSY document must consist of a single value (which may be an object or array)
 | Strings | ✅ | ✅ |
 | Arrays | ✅ | ✅ |
 | Objects | ✅ | ✅ |
+| Serde support | ⚠️ (custom impl) | ✅ Full integration |
 
 ---
 
-## 7. Error Reporting
+## 8. Limitations
+
+### Data Type Limitations
+
+- **No duplicate key handling**: If an object has duplicate keys, the last value wins (standard HashMap behavior).
+- **String-only map keys**: Arbitrary key types are not supported; only `String` keys work in Serde integration.
+- **Enum variants**: Complex enum variants (tuple, struct) are not supported for configuration use cases.
+- **Bytes**: `&[u8]` is serialized as an array of integers `[0, 1, 2, ...]`, not as a string.
+
+### Format Limitations
+
+- **Comments are not preserved**: Roundtrip serialization (parse → serialize) strips all comments.
+- **Whitespace normalization**: Original formatting is not preserved; serialization uses standard indentation.
+- **Float formatting**: Floats use Rust's default `to_string()` formatting, which may differ from the original input.
+- **No custom precision control**: Float output precision cannot be customized per field.
+
+### Serialization Limitations
+
+- **Unordered keys**: Object keys are output in arbitrary order (HashMap iteration order).
+- **No format options**: Serialization always uses default formatting (4-space indentation, newlines as separators). Use `crate::to_string_with_options()` to customize.
+
+---
+
+## 9. Error Reporting
 
 The COSY parser provides detailed error messages with **line and column information**:
 
@@ -213,19 +334,35 @@ Parse error at line 3, column 15: Expected ':' after object key
 
 This helps users quickly locate and fix issues in their configuration files.
 
+### Serde Error Messages
+
+Deserialization errors include the type mismatch details:
+
+```rust
+let result: Result<Config, _> = serde_support::from_str("{ port: \"not a number\" }");
+// Error: Deserialization error: expected integer
+```
+
 ---
 
-## 8. Use Cases
+## 10. Use Cases
 
 COSY is ideal for:
 - **Configuration files** (better than JSON, simpler than YAML)
 - **Data serialization** (more human-friendly than JSON)
 - **Game assets** (fast to write by hand)
 - **Build system configs** (comments for documentation)
+- **Settings files** (with Serde integration for type-safe deserialization)
+
+**COSY is NOT recommended for:**
+- Complex type serialization (use JSON or bincode)
+- Preserving comments (original comments are lost during roundtrip)
+- Non-string map keys
+- Complex enum variants
 
 ---
 
-## 9. ABNF Grammar (Informal)
+## 11. ABNF Grammar (Informal)
 
 ```
 document = value
@@ -254,6 +391,6 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ---
 
-## 10. Version History
+## 12. Version History
 
-- **1.0.0** (Current) - Initial specification
+- **1.0.0** (Current) - Initial specification with full Serde support and comprehensive error handling

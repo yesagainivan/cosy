@@ -224,10 +224,24 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
                     let (key, val) = obj.into_iter().next().unwrap();
                     visitor.visit_enum(NewtypeVariantDeserializer { key, value: val })
                 } else {
-                    Err(DeserializeError::custom("expected enum"))
+                    Err(DeserializeError::custom(
+                        "enum variants with multiple fields are not supported (use newtype or unit variants)",
+                    ))
                 }
             }
-            _ => Err(DeserializeError::custom("expected enum")),
+            _ => Err(DeserializeError::custom(
+                "expected enum (string or single-key object)",
+            )),
+        }
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.value {
+            Value::Null => visitor.visit_none(),
+            other => visitor.visit_some(ValueDeserializer::new(other)),
         }
     }
 
@@ -240,7 +254,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
 
     serde::forward_to_deserialize_any! {
         u8 u16 u32 i8 i16 i32 f32 unit unit_struct newtype_struct
-        tuple tuple_struct option bytes byte_buf char identifier
+        tuple tuple_struct bytes byte_buf char identifier
     }
 }
 
@@ -347,7 +361,9 @@ impl<'de> de::VariantAccess<'de> for UnitVariantDeserializer {
     where
         V: Visitor<'de>,
     {
-        Err(DeserializeError::custom("expected unit variant"))
+        Err(DeserializeError::custom(
+            "tuple variants not supported; use newtype or unit variants",
+        ))
     }
 
     fn struct_variant<V>(
@@ -358,7 +374,9 @@ impl<'de> de::VariantAccess<'de> for UnitVariantDeserializer {
     where
         V: Visitor<'de>,
     {
-        Err(DeserializeError::custom("expected unit variant"))
+        Err(DeserializeError::custom(
+            "struct variants not supported; use newtype or unit variants",
+        ))
     }
 }
 
@@ -399,7 +417,9 @@ impl<'de> de::VariantAccess<'de> for NewtypeVariantDeserializer {
     where
         V: Visitor<'de>,
     {
-        Err(DeserializeError::custom("expected newtype variant"))
+        Err(DeserializeError::custom(
+            "tuple variants not supported; use newtype or unit variants",
+        ))
     }
 
     fn struct_variant<V>(
@@ -410,7 +430,9 @@ impl<'de> de::VariantAccess<'de> for NewtypeVariantDeserializer {
     where
         V: Visitor<'de>,
     {
-        Err(DeserializeError::custom("expected newtype variant"))
+        Err(DeserializeError::custom(
+            "struct variants not supported; use newtype or unit variants",
+        ))
     }
 }
 
@@ -596,10 +618,7 @@ impl Serializer for ValueSerializer {
         len: usize,
     ) -> Result<SerializeObject, SerializeError> {
         Ok(SerializeObject {
-            object: {
-                let map = HashMap::with_capacity(len);
-                map
-            },
+            object: HashMap::with_capacity(len),
             next_key: Some(variant.to_string()),
         })
     }
