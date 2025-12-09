@@ -468,3 +468,14 @@ fn test_parse_error_position() {
         _ => panic!("Expected parse error"),
     }
 }
+
+#[test]
+fn test_string_with_newlines_deserialization() {
+    let original_str = "line1\nline2";
+    // The input string as it would be serialized and then parsed by `from_str`.
+    // The `r#""...""#` raw string literal ensures that `\n` is interpreted by the parser as an actual newline character escape,
+    // similar to how `test_string_escapes` is written.
+    let input_for_parser = r#""line1\nline2""#;
+    let deserialized_value = from_str(input_for_parser).unwrap();
+    assert_eq!(deserialized_value, Value::String(original_str.to_string()));
+}

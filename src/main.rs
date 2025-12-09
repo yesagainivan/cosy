@@ -1,70 +1,98 @@
-use cosy::{SerializeOptions, from_str, to_string};
+use cosy::serde_support;
+use serde::{Deserialize, Serialize};
+
+/// Define your configuration structure with Serde derives
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct ServerConfig {
+    host: String,
+    port: u16,
+    ssl: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct DatabaseConfig {
+    url: String,
+    max_connections: u32,
+    timeout: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct AppConfig {
+    version: String,
+    debug: bool,
+    server: ServerConfig,
+    database: DatabaseConfig,
+    features: Vec<String>,
+}
 
 fn main() {
-    let cosy_config = r#"{
-        // Server configuration
+    let cosy_text = r#"{
+        version: "1.0.0"
+        debug: true
+
         server: {
             host: "localhost"
             port: 8080
             ssl: false
         }
 
-        // Database settings
         database: {
             url: "postgresql://localhost/mydb"
             max_connections: 100
             timeout: 30
         }
 
-        // Feature flags
         features: [
             "auth"
             "logging"
             "caching"
         ]
-
-        // Metadata
-        version: "1.0.0"
-        debug: true
     }"#;
 
-    println!("=== PARSING ===\n");
-    match from_str(cosy_config) {
-        Ok(value) => {
-            println!("✓ Successfully parsed COSY configuration\n");
+    println!("=== SERDE DESERIALIZATION ===\n");
 
-            println!("=== SERIALIZING (Pretty) ===\n");
-            let pretty = to_string(&value);
-            println!("{}\n", pretty);
+    match serde_support::from_str::<AppConfig>(cosy_text) {
+        Ok(config) => {
+            println!("✓ Successfully deserialized into AppConfig struct!\n");
+            println!("Config: {:#?}\n", config);
 
-            println!("=== SERIALIZING (Compact) ===\n");
-            let options = SerializeOptions {
-                use_newlines: false,
-                trailing_commas: false,
-                indent_size: 2,
-            };
-            let compact = cosy::to_string_with_options(&value, options);
-            println!("{}\n", compact);
+            println!("=== TYPE-SAFE ACCESS ===\n");
+            println!("Version: {}", config.version);
+            println!("Debug mode: {}", config.debug);
+            println!("Server: {}:{}", config.server.host, config.server.port);
+            println!("Database: {}", config.database.url);
+            println!("Features: {:?}\n", config.features);
 
-            println!("=== ROUNDTRIP TEST ===\n");
-            match from_str(&pretty) {
-                Ok(reparsed) => {
-                    if reparsed == value {
-                        println!(
-                            "✓ Roundtrip successful! Parse → Serialize → Parse works perfectly."
-                        );
-                    } else {
-                        println!("✗ Values differ after roundtrip");
+            println!("=== SERDE SERIALIZATION ===\n");
+            match serde_support::to_string(&config) {
+                Ok(serialized) => {
+                    println!("✓ Successfully serialized back to COSY:\n");
+                    println!("{}\n", serialized);
+
+                    println!("=== ROUNDTRIP TEST ===\n");
+                    match serde_support::from_str::<AppConfig>(&serialized) {
+                        Ok(reparsed) => {
+                            if reparsed == config {
+                                println!(
+                                    "✓ Perfect roundtrip! Struct → COSY → Struct preserves all data"
+                                );
+                            } else {
+                                println!("✗ Roundtrip failed: configs differ");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Failed to reparse: {}", e);
+                        }
                     }
                 }
                 Err(e) => {
-                    eprintln!("✗ Failed to reparse serialized output: {}", e);
+                    eprintln!("✗ Serialization failed: {}", e);
                 }
             }
         }
         Err(e) => {
             eprintln!(
-                "✗ Parse error at line {}, column {}: {}",
+                "✗ Deserialization failed at line {}, column {}: {}",
                 e.line(),
                 e.column(),
                 e.message()

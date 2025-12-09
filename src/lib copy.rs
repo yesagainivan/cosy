@@ -1,6 +1,6 @@
 //! # COSY: Comfortable Object Syntax, Yay!
 //!
-//! A human-friendly configuration format built in Rust with full Serde support.
+//! A human-friendly configuration format built in Rust.
 //!
 //! ## Features
 //!
@@ -10,40 +10,41 @@
 //! - **Newlines as separators**: Objects and arrays can use newlines instead of commas
 //! - **Type distinction**: Separate integers from floats, proper null support
 //! - **Detailed error messages**: Accurate line/column information
-//! - **Full Serde support**: Automatic serialization/deserialization to Rust structs
 //!
-//! ## Example with Serde
+//! ## Example
+//!
+//! ```text
+//! {
+//!     // Configuration example
+//!     name: "Alice"
+//!     age: 30
+//!     scores: [95, 87, 92,]
+//!
+//!     server: {
+//!         host: "localhost"
+//!         port: 8080
+//!     }
+//! }
+//! ```
+//!
+//! ## Usage
 //!
 //! ```no_run
-//! use serde::{Deserialize, Serialize};
-//! use cosy;
-//!
-//! #[derive(Serialize, Deserialize)]
-//! struct Config {
-//!     name: String,
-//!     age: u32,
-//!     scores: Vec<i32>,
-//! }
+//! use cosy::from_str;
 //!
 //! let cosy_text = r#"{
 //!     name: "Alice"
 //!     age: 30
-//!     scores: [95, 87, 92]
 //! }"#;
 //!
-//! // Direct deserialization into your struct!
-//! let config: Config = cosy::serde_support::from_str(cosy_text).unwrap();
-//! assert_eq!(config.name, "Alice");
-//! assert_eq!(config.age, 30);
-//!
-//! // And serialize back
-//! let serialized = cosy::serde_support::to_string(&config).unwrap();
-//! println!("{}", serialized);
+//! match from_str(cosy_text) {
+//!     Ok(value) => println!("Parsed: {:?}", value),
+//!     Err(e) => eprintln!("Error at line {}, column {}: {}", e.line(), e.column(), e.message()),
+//! }
 //! ```
 
 pub mod lexer;
 pub mod parser;
-pub mod serde_support;
 pub mod serializer;
 
 use std::collections::HashMap;
