@@ -1,31 +1,5 @@
 use std::{error::Error, fmt};
 
-/// Position information for a token
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    pub line: usize,
-    pub column: usize,
-}
-
-impl Position {
-    pub fn new(line: usize, column: usize) -> Self {
-        Position { line, column }
-    }
-}
-
-/// A token in the COSY format with position info
-#[derive(Debug, Clone, PartialEq)]
-pub struct TokenWithPos {
-    pub token: Token,
-    pub pos: Position,
-}
-
-impl TokenWithPos {
-    pub fn new(token: Token, pos: Position) -> Self {
-        TokenWithPos { token, pos }
-    }
-}
-
 /// A token in the COSY format
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -93,7 +67,7 @@ impl fmt::Display for LexError {
     }
 }
 
-/// The COSY lexer - FIXED version
+/// The COSY lexer
 pub struct Lexer {
     input: Vec<char>,
     position: usize,
@@ -112,25 +86,19 @@ impl Lexer {
         }
     }
 
-    /// Tokenize the entire input, returning tokens with positions
-    pub fn tokenize(&mut self) -> Result<Vec<TokenWithPos>, LexError> {
+    /// Tokenize the entire input
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, LexError> {
         let mut tokens = Vec::new();
 
         loop {
             self.skip_whitespace_and_comments();
 
             if self.is_at_end() {
-                tokens.push(TokenWithPos::new(
-                    Token::Eof,
-                    Position::new(self.line, self.column),
-                ));
+                tokens.push(Token::Eof);
                 break;
             }
 
-            // Capture position RIGHT before we start lexing the token
-            let pos = Position::new(self.line, self.column);
-            let token = self.next_token()?;
-            tokens.push(TokenWithPos::new(token, pos));
+            tokens.push(self.next_token()?);
         }
 
         Ok(tokens)
@@ -318,20 +286,21 @@ impl Lexer {
         Ok(token)
     }
 
-    /// Skip whitespace and comments - FIXED to not double-count newlines
+    /// Skip whitespace and comments
     fn skip_whitespace_and_comments(&mut self) {
         while !self.is_at_end() {
             match self.current_char() {
                 ' ' | '\t' | '\r' => self.advance(),
                 '\n' => {
-                    self.advance(); // advance() will handle the newline tracking
+                    self.advance();
+                    self.line += 1;
+                    self.column = 1;
                 }
                 '/' if self.peek_next() == Some('/') => {
                     // Skip comment until end of line
                     while !self.is_at_end() && self.current_char() != '\n' {
                         self.advance();
                     }
-                    // Don't consume the newline itself; let the next iteration handle it
                 }
                 _ => break,
             }
@@ -356,7 +325,7 @@ impl Lexer {
         }
     }
 
-    /// Move to the next character - SINGLE SOURCE OF TRUTH for position tracking
+    /// Move to the next character
     fn advance(&mut self) {
         if !self.is_at_end() {
             if self.input[self.position] == '\n' {
@@ -394,69 +363,100 @@ mod tests {
         let tokens = lexer.tokenize().unwrap();
 
         assert_eq!(tokens.len(), 7); // 6 tokens + EOF
-        assert_eq!(tokens[0].token, Token::LeftBrace);
-        assert_eq!(tokens[1].token, Token::RightBrace);
+        assert_eq!(tokens[0], Token::LeftBrace);
+        assert_eq!(tokens[1], Token::RightBrace);
+        assert_eq!(tokens[2], Token::LeftBracket);
+        assert_eq!(tokens[3], Token::RightBracket);
+        assert_eq!(tokens[4], Token::Colon);
+        assert_eq!(tokens[5], Token::Comma);
     }
 
     #[test]
-    fn test_position_tracking() {
-        let mut lexer = Lexer::new("true\nfalse");
+    fn test_keywords() {
+        let mut lexer = Lexer::new("true false null");
         let tokens = lexer.tokenize().unwrap();
 
-        println!(
-            "Tokens: {:?}",
-            tokens.iter().map(|t| (&t.token, t.pos)).collect::<Vec<_>>()
-        );
-
-        assert_eq!(tokens[0].pos, Position::new(1, 1)); // true on line 1, col 1
-        assert_eq!(tokens[1].pos, Position::new(2, 1)); // false on line 2, col 1
+        assert_eq!(tokens[0], Token::True);
+        assert_eq!(tokens[1], Token::False);
+        assert_eq!(tokens[2], Token::Null);
     }
 
     #[test]
-    fn test_complex_positions() {
+    fn test_identifiers() {
+        let mut lexer = Lexer::new("name age _private foo_bar");
+        let tokens = lexer.tokenize().unwrap();
+
+        assert!(matches!(tokens[0], Token::Identifier(ref s) if s == "name"));
+        assert!(matches!(tokens[1], Token::Identifier(ref s) if s == "age"));
+        assert!(matches!(tokens[2], Token::Identifier(ref s) if s == "_private"));
+        assert!(matches!(tokens[3], Token::Identifier(ref s) if s == "foo_bar"));
+    }
+
+    #[test]
+    fn test_strings() {
+        let mut lexer = Lexer::new(r#""hello" "world with spaces" "with\"quote""#);
+        let tokens = lexer.tokenize().unwrap();
+
+        assert!(matches!(tokens[0], Token::String(ref s) if s == "hello"));
+        assert!(matches!(tokens[1], Token::String(ref s) if s == "world with spaces"));
+        assert!(matches!(tokens[2], Token::String(ref s) if s == "with\"quote"));
+    }
+
+    #[test]
+    fn test_numbers() {
+        let mut lexer = Lexer::new("42 -10 3.14 -0.5 1e10 2.5e-3");
+        let tokens = lexer.tokenize().unwrap();
+
+        assert_eq!(tokens[0], Token::Integer(42));
+        assert_eq!(tokens[1], Token::Integer(-10));
+        assert_eq!(tokens[2], Token::Float(3.14));
+        assert_eq!(tokens[3], Token::Float(-0.5));
+        assert_eq!(tokens[4], Token::Float(1e10));
+        assert_eq!(tokens[5], Token::Float(2.5e-3));
+    }
+
+    #[test]
+    fn test_comments() {
+        let mut lexer = Lexer::new("true // this is a comment\nfalse");
+        let tokens = lexer.tokenize().unwrap();
+
+        assert_eq!(tokens[0], Token::True);
+        assert_eq!(tokens[1], Token::False);
+        assert_eq!(tokens[2], Token::Eof);
+    }
+
+    #[test]
+    fn test_whitespace_and_newlines() {
+        let mut lexer = Lexer::new("  true  \n  false  ");
+        let tokens = lexer.tokenize().unwrap();
+
+        assert_eq!(tokens[0], Token::True);
+        assert_eq!(tokens[1], Token::False);
+        assert_eq!(tokens[2], Token::Eof);
+    }
+
+    #[test]
+    fn test_escape_sequences() {
+        let mut lexer = Lexer::new(r#""hello\nworld\ttab""#);
+        let tokens = lexer.tokenize().unwrap();
+
+        assert!(matches!(tokens[0], Token::String(ref s) if s == "hello\nworld\ttab"));
+    }
+
+    #[test]
+    fn test_complex_structure() {
         let input = r#"
-name: "Alice"
-age: 30
-"#;
+            // Configuration
+            name: "Alice"
+            age: 30
+            scores: [95, 87, 92,]
+        "#;
+
         let mut lexer = Lexer::new(input);
         let tokens = lexer.tokenize().unwrap();
 
-        // Verify some positions exist
-        assert!(tokens.iter().any(|t| t.pos.line > 1));
-    }
-
-    #[test]
-    fn test_position_tracking_multiline() {
-        let input = "a\nb\nc";
-        let mut lexer = Lexer::new(input);
-        let tokens = lexer.tokenize().unwrap();
-
-        // a should be at line 1
-        assert_eq!(tokens[0].pos.line, 1);
-        // b should be at line 2
-        assert_eq!(tokens[1].pos.line, 2);
-        // c should be at line 3
-        assert_eq!(tokens[2].pos.line, 3);
-    }
-
-    #[test]
-    fn test_column_tracking() {
-        let input = "a b c";
-        let mut lexer = Lexer::new(input);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens[0].pos.column, 1); // a at col 1
-        assert_eq!(tokens[1].pos.column, 3); // b at col 3
-        assert_eq!(tokens[2].pos.column, 5); // c at col 5
-    }
-
-    #[test]
-    fn test_newline_resets_column() {
-        let input = "abc\ndef";
-        let mut lexer = Lexer::new(input);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens[0].pos, Position::new(1, 1)); // abc at line 1, col 1
-        assert_eq!(tokens[1].pos, Position::new(2, 1)); // def at line 2, col 1
+        // Should successfully tokenize without errors
+        assert!(tokens.len() > 0);
+        assert_eq!(tokens[tokens.len() - 1], Token::Eof);
     }
 }

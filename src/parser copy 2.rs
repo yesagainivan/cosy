@@ -1,5 +1,5 @@
+use crate::Value;
 use crate::lexer::{Lexer, Position, Token, TokenWithPos};
-use crate::{CosynError, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -284,11 +284,11 @@ impl Parser {
 }
 
 /// Parse COSY from a string
-pub fn from_str(input: &str) -> Result<Value, CosynError> {
+pub fn from_str(input: &str) -> Result<Value, Box<dyn std::error::Error>> {
     let mut lexer = Lexer::new(input);
-    let tokens = lexer.tokenize()?; // ? operator converts LexError to CosynError
+    let tokens = lexer.tokenize()?;
     let mut parser = Parser::new(tokens);
-    let value = parser.parse()?; // ? operator converts ParseError to CosynError
+    let value = parser.parse()?;
     Ok(value)
 }
 

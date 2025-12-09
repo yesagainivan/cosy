@@ -1,5 +1,5 @@
+use crate::Value;
 use crate::lexer::{Lexer, Position, Token, TokenWithPos};
-use crate::{CosynError, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -87,6 +87,115 @@ impl Parser {
         }
     }
 
+    /// Parse an object: { key: value, key: value, ... }
+    fn parse_object(&mut self) -> Result<Value, ParseError> {
+        self.expect(Token::LeftBrace, "Expected '{' to start object")?;
+
+        let mut object = HashMap::new();
+
+        // Handle empty object
+        if matches!(self.current_token(), Token::RightBrace) {
+            self.advance();
+            return Ok(Value::Object(object));
+        }
+
+        loop {
+            // Parse key (identifier or string)
+            let key = match &self.current_token() {
+                Token::Identifier(s) => {
+                    let k = s.clone();
+                    self.advance();
+                    k
+                }
+                Token::String(s) => {
+                    let k = s.clone();
+                    self.advance();
+                    k
+                }
+                token => {
+                    return Err(self.error_at_current(format!(
+                        "Expected object key (identifier or string), found {}",
+                        token
+                    )));
+                }
+            };
+
+            // Parse colon
+            self.expect(Token::Colon, "Expected ':' after object key")?;
+
+            // Parse value
+            let value = self.parse_value()?;
+            object.insert(key, value);
+
+            // Check for comma or end of object
+            match &self.current_token() {
+                Token::Comma => {
+                    self.advance();
+                    // Allow trailing comma before }
+                    if matches!(self.current_token(), Token::RightBrace) {
+                        self.advance();
+                        break;
+                    }
+                }
+                Token::RightBrace => {
+                    self.advance();
+                    break;
+                }
+                token => {
+                    return Err(self.error_at_current(format!(
+                        "Expected ',' or '}}' in object, found {}",
+                        token
+                    )));
+                }
+            }
+        }
+
+        Ok(Value::Object(object))
+    }
+
+    /// Parse an array: [ value, value, ... ]
+    fn parse_array(&mut self) -> Result<Value, ParseError> {
+        self.expect(Token::LeftBracket, "Expected '[' to start array")?;
+
+        let mut array = Vec::new();
+
+        // Handle empty array
+        if matches!(self.current_token(), Token::RightBracket) {
+            self.advance();
+            return Ok(Value::Array(array));
+        }
+
+        loop {
+            // Parse value
+            let value = self.parse_value()?;
+            array.push(value);
+
+            // Check for comma or end of array
+            match &self.current_token() {
+                Token::Comma => {
+                    self.advance();
+                    // Allow trailing comma before ]
+                    if matches!(self.current_token(), Token::RightBracket) {
+                        self.advance();
+                        break;
+                    }
+                }
+                Token::RightBracket => {
+                    self.advance();
+                    break;
+                }
+                token => {
+                    return Err(self.error_at_current(format!(
+                        "Expected ',' or ']' in array, found {}",
+                        token
+                    )));
+                }
+            }
+        }
+
+        Ok(Value::Array(array))
+    }
+
     /// Expect a specific token, advance if found
     fn expect(&mut self, expected: Token, message: &str) -> Result<(), ParseError> {
         let current = self.current_token();
@@ -148,147 +257,12 @@ impl Parser {
     }
 }
 
-/// Parser changes to handle optional commas after newlines
-
-// In parser.rs, add this helper method:
-
-impl Parser {
-    /// Check if there's a newline before current token
-    fn has_newline_before_current(&self) -> bool {
-        if self.position == 0 {
-            return false;
-        }
-
-        let current_line = self.current_position().line;
-        let prev_line = self.tokens[self.position - 1].pos.line;
-
-        current_line > prev_line
-    }
-
-    /// Parse an object with optional commas after newlines
-    fn parse_object(&mut self) -> Result<Value, ParseError> {
-        self.expect(Token::LeftBrace, "Expected '{' to start object")?;
-
-        let mut object = HashMap::new();
-
-        // Handle empty object
-        if matches!(self.current_token(), Token::RightBrace) {
-            self.advance();
-            return Ok(Value::Object(object));
-        }
-
-        loop {
-            // Parse key (identifier or string)
-            let key = match &self.current_token() {
-                Token::Identifier(s) => {
-                    let k = s.clone();
-                    self.advance();
-                    k
-                }
-                Token::String(s) => {
-                    let k = s.clone();
-                    self.advance();
-                    k
-                }
-                token => {
-                    return Err(self.error_at_current(format!(
-                        "Expected object key (identifier or string), found {}",
-                        token
-                    )));
-                }
-            };
-
-            // Parse colon
-            self.expect(Token::Colon, "Expected ':' after object key")?;
-
-            // Parse value
-            let value = self.parse_value()?;
-            object.insert(key, value);
-
-            // Check for comma, newline, or end of object
-            match &self.current_token() {
-                Token::Comma => {
-                    self.advance();
-                    // Allow trailing comma before }
-                    if matches!(self.current_token(), Token::RightBrace) {
-                        self.advance();
-                        break;
-                    }
-                }
-                Token::RightBrace => {
-                    self.advance();
-                    break;
-                }
-                _ if self.has_newline_before_current() => {
-                    // Newline acts as separator, continue parsing next key
-                    continue;
-                }
-                token => {
-                    return Err(self.error_at_current(format!(
-                        "Expected ',' or '}}' in object, found {}",
-                        token
-                    )));
-                }
-            }
-        }
-
-        Ok(Value::Object(object))
-    }
-
-    /// Parse an array with optional commas after newlines
-    fn parse_array(&mut self) -> Result<Value, ParseError> {
-        self.expect(Token::LeftBracket, "Expected '[' to start array")?;
-
-        let mut array = Vec::new();
-
-        // Handle empty array
-        if matches!(self.current_token(), Token::RightBracket) {
-            self.advance();
-            return Ok(Value::Array(array));
-        }
-
-        loop {
-            // Parse value
-            let value = self.parse_value()?;
-            array.push(value);
-
-            // Check for comma, newline, or end of array
-            match &self.current_token() {
-                Token::Comma => {
-                    self.advance();
-                    // Allow trailing comma before ]
-                    if matches!(self.current_token(), Token::RightBracket) {
-                        self.advance();
-                        break;
-                    }
-                }
-                Token::RightBracket => {
-                    self.advance();
-                    break;
-                }
-                _ if self.has_newline_before_current() => {
-                    // Newline acts as separator, continue parsing next value
-                    continue;
-                }
-                token => {
-                    return Err(self.error_at_current(format!(
-                        "Expected ',' or ']' in array, found {}",
-                        token
-                    )));
-                }
-            }
-        }
-
-        Ok(Value::Array(array))
-    }
-}
-
 /// Parse COSY from a string
-pub fn from_str(input: &str) -> Result<Value, CosynError> {
+pub fn from_str(input: &str) -> Result<Value, Box<dyn std::error::Error>> {
     let mut lexer = Lexer::new(input);
-    let tokens = lexer.tokenize()?; // ? operator converts LexError to CosynError
+    let tokens = lexer.tokenize()?;
     let mut parser = Parser::new(tokens);
-    let value = parser.parse()?; // ? operator converts ParseError to CosynError
+    let value = parser.parse()?;
     Ok(value)
 }
 
