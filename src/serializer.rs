@@ -1,4 +1,3 @@
-
 use crate::Value;
 use std::collections::HashMap;
 
@@ -59,11 +58,7 @@ impl Serializer {
             Value::Float(f) => {
                 // Format floats nicely, avoiding unnecessary decimals
                 let s = f.to_string();
-                if s.ends_with(".0") {
-                    s
-                } else {
-                    s
-                }
+                if s.ends_with(".0") { s } else { s }
             }
             Value::String(s) => self.serialize_string(s),
             Value::Array(arr) => self.serialize_array(arr),
@@ -103,14 +98,17 @@ impl Serializer {
                 result.push_str(&self.serialize_value(item));
 
                 if i < arr.len() - 1 {
+                    result.push(',');
                     result.push('\n');
                 } else if self.options.trailing_commas {
+                    result.push(',');
+                    result.push('\n');
+                } else {
                     result.push('\n');
                 }
             }
 
             self.indent_level -= 1;
-            result.push('\n');
             result.push_str(&self.indent());
         } else {
             // Single line for short arrays or when use_newlines is false
@@ -149,14 +147,17 @@ impl Serializer {
                 result.push_str(&self.serialize_value(value));
 
                 if i < keys.len() - 1 {
+                    result.push(',');
                     result.push('\n');
                 } else if self.options.trailing_commas {
+                    result.push(',');
+                    result.push('\n');
+                } else {
                     result.push('\n');
                 }
             }
 
             self.indent_level -= 1;
-            result.push('\n');
             result.push_str(&self.indent());
         } else {
             // Single line for compact output

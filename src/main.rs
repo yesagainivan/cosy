@@ -1,4 +1,4 @@
-use cosy::from_str;
+use cosy::{SerializeOptions, from_str, to_string};
 
 fn main() {
     let cosy_config = r#"{
@@ -28,10 +28,39 @@ fn main() {
         debug: true
     }"#;
 
+    println!("=== PARSING ===\n");
     match from_str(cosy_config) {
         Ok(value) => {
-            println!("✓ Successfully parsed COSY configuration");
-            println!("\n{:#?}", value);
+            println!("✓ Successfully parsed COSY configuration\n");
+
+            println!("=== SERIALIZING (Pretty) ===\n");
+            let pretty = to_string(&value);
+            println!("{}\n", pretty);
+
+            println!("=== SERIALIZING (Compact) ===\n");
+            let options = SerializeOptions {
+                use_newlines: false,
+                trailing_commas: false,
+                indent_size: 2,
+            };
+            let compact = cosy::to_string_with_options(&value, options);
+            println!("{}\n", compact);
+
+            println!("=== ROUNDTRIP TEST ===\n");
+            match from_str(&pretty) {
+                Ok(reparsed) => {
+                    if reparsed == value {
+                        println!(
+                            "✓ Roundtrip successful! Parse → Serialize → Parse works perfectly."
+                        );
+                    } else {
+                        println!("✗ Values differ after roundtrip");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("✗ Failed to reparse serialized output: {}", e);
+                }
+            }
         }
         Err(e) => {
             eprintln!(

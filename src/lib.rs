@@ -45,6 +45,7 @@
 
 pub mod lexer;
 pub mod parser;
+pub mod serializer;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -172,3 +173,4 @@ impl CosynError {
 
 // Re-export public API
 pub use parser::{ParseError, from_str};
+pub use serializer::{SerializeOptions, to_string, to_string_with_options};
