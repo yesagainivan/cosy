@@ -1,103 +1,93 @@
 use cosy::serde_support;
 use serde::{Deserialize, Serialize};
 
-/// Define your configuration structure with Serde derives
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct ServerConfig {
-    host: String,
-    port: u16,
-    ssl: bool,
+// Enum to showcase unit and newtype variant support
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+enum LogLevel {
+    Error,         // Unit variant
+    Warn,          // Unit variant
+    Info,          // Unit variant
+    Trace(String), // Newtype variant (e.g., Trace("ModuleA"))
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct DatabaseConfig {
-    url: String,
-    max_connections: u32,
-    timeout: u32,
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+struct MetricsConfig {
+    // Unquoted key in COSY
+    enabled: bool,
+    // Float value
+    sample_rate: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct AppConfig {
-    version: String,
-    debug: bool,
-    server: ServerConfig,
-    database: DatabaseConfig,
-    features: Vec<String>,
+    name: String,
+    // Optional field (serializes to null if None)
+    admin_email: Option<String>,
+    log_level: LogLevel,
+    metrics: MetricsConfig,
+    // Array with newlines as separators
+    endpoints: Vec<String>,
 }
 
-fn main() {
-    let cosy_text = r#"{
-        version: "1.0.0"
-        debug: true
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // let cosy_text = r#"{
+    //     // Main application config
+    //     name: "Telemetry Service"
+    //     admin_email: null // Explicitly null/None
+    //     log_level: { Trace: "Startup" } // Newtype enum variant, wrapped in an object
 
-        server: {
-            host: "localhost"
-            port: 8080
-            ssl: false
-        }
+    //     metrics: {
+    //         enabled: true
+    //         sample_rate: 0.05e-1 // Float number
+    //     }
 
-        database: {
-            url: "postgresql://localhost/mydb"
-            max_connections: 100
-            timeout: 30
-        }
+    //     // Array with newlines as separators, no commas needed
+    //     endpoints: [
+    //         "/api/v1"
+    //         "/api/v2/beta"
+    //         "/metrics"
+    //     ]
+    //     // Trailing comma is allowed
+    // }"#;
 
-        features: [
-            "auth"
-            "logging"
-            "caching"
-        ]
-    }"#;
+    let cosy_text = std::fs::read_to_string("config.cosy")?;
+    // println!("cos:\n {}", cosy_text);
 
-    println!("=== SERDE DESERIALIZATION ===\n");
+    println!("=== COSY DESERIALIZATION (Advanced) ===\n");
 
-    match serde_support::from_str::<AppConfig>(cosy_text) {
-        Ok(config) => {
-            println!("✓ Successfully deserialized into AppConfig struct!\n");
-            println!("Config: {:#?}\n", config);
+    // 1. Deserialize the complex structure
+    let config: AppConfig = serde_support::from_str(cosy_text.as_str())?;
 
-            println!("=== TYPE-SAFE ACCESS ===\n");
-            println!("Version: {}", config.version);
-            println!("Debug mode: {}", config.debug);
-            println!("Server: {}:{}", config.server.host, config.server.port);
-            println!("Database: {}", config.database.url);
-            println!("Features: {:?}\n", config.features);
+    println!("✓ Successfully deserialized into AppConfig struct!");
+    println!("Config: {:#?}\n", config);
 
-            println!("=== SERDE SERIALIZATION ===\n");
-            match serde_support::to_string(&config) {
-                Ok(serialized) => {
-                    println!("✓ Successfully serialized back to COSY:\n");
-                    println!("{}\n", serialized);
+    println!("=== TYPE-SAFE ACCESS ===\n");
+    println!("Service: {}", config.name);
+    println!("Admin Email: {:?}", config.admin_email); // Will print None
+    println!("Log Level: {:?}\n", config.log_level);
 
-                    println!("=== ROUNDTRIP TEST ===\n");
-                    match serde_support::from_str::<AppConfig>(&serialized) {
-                        Ok(reparsed) => {
-                            if reparsed == config {
-                                println!(
-                                    "✓ Perfect roundtrip! Struct → COSY → Struct preserves all data"
-                                );
-                            } else {
-                                println!("✗ Roundtrip failed: configs differ");
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("✗ Failed to reparse: {}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("✗ Serialization failed: {}", e);
-                }
-            }
-        }
+    // 2. Modify the struct
+    let mut modified_config = config.clone();
+    modified_config.log_level = LogLevel::Error;
+    modified_config.metrics.sample_rate = 1.0;
+    modified_config.admin_email = Some("contact@example.com".to_string());
+
+    // 3. Serialize back to COSY
+    println!("=== COSY SERIALIZATION (Modified) ===\n");
+    let serialized = serde_support::to_string(&modified_config)?;
+
+    println!("✓ Successfully serialized back to COSY:\n");
+    println!("{}\n", serialized);
+
+    // 4. Test the Serde error handling
+    let bad_cosy = r#"{ log_level: 123 }"#;
+    match serde_support::from_str::<AppConfig>(bad_cosy) {
+        Ok(_) => {}
         Err(e) => {
-            eprintln!(
-                "✗ Deserialization failed at line {}, column {}: {}",
-                e.line(),
-                e.column(),
-                e.message()
-            );
-            std::process::exit(1);
+            println!("=== COSY ERROR REPORTING ===\n");
+            eprintln!("✗ Expected error captured: {}", e.message());
         }
     }
+
+    Ok(())
 }

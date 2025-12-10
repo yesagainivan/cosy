@@ -1,0 +1,19 @@
+{
+// Main application config
+name: "Telemetry Service"
+admin_email: null // Explicitly null/None
+log_level: { Trace: "Startup" } // Newtype enum variant, wrapped in an object
+
+metrics: {
+    enabled: true
+    sample_rate: 0.05e-1 // Float number
+}
+
+// Array with newlines as separators, no commas needed
+endpoints: [
+    "/api/v1"
+    "/api/v2/beta"
+    "/metrics"
+]
+// Trailing comma is allowed
+}

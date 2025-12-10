@@ -1,4 +1,3 @@
-
 // tests/serde_tests.rs
 // Comprehensive tests for Serde integration, edge cases, and roundtrip behavior
 
@@ -66,7 +65,11 @@ fn test_serde_struct_with_vec_roundtrip() {
 
     let original = Team {
         name: "Dev Team".to_string(),
-        members: vec!["Alice".to_string(), "Bob".to_string(), "Charlie".to_string()],
+        members: vec![
+            "Alice".to_string(),
+            "Bob".to_string(),
+            "Charlie".to_string(),
+        ],
     };
 
     let serialized = serde_support::to_string(&original).unwrap();
@@ -338,12 +341,12 @@ fn test_serde_enum_error_message_quality() {
 
     #[derive(Debug, Deserialize)]
     struct Container {
-        value: ComplexEnum,
+        _value: ComplexEnum,
     }
 
     #[derive(Debug, Deserialize)]
     enum ComplexEnum {
-        MultiField { a: i32, b: i32 },
+        MultiField { _a: i32, _b: i32 },
     }
 
     let result: Result<Container, _> = serde_support::from_str(cosy_text);
@@ -445,7 +448,12 @@ fn test_serde_mixed_separators_in_object() {
     }"#;
 
     let deserialized: Data = serde_support::from_str(cosy_text).unwrap();
-    let expected = Data { a: 1, b: 2, c: 3, d: 4 };
+    let expected = Data {
+        a: 1,
+        b: 2,
+        c: 3,
+        d: 4,
+    };
 
     assert_eq!(deserialized, expected);
 }
@@ -575,7 +583,7 @@ fn test_serde_realistic_config() {
 fn test_serde_deserialization_type_mismatch() {
     #[derive(Debug, Deserialize)]
     struct Expected {
-        value: i32,
+        _value: i32,
     }
 
     let cosy_text = r#"{ value: "not a number" }"#;
@@ -588,7 +596,7 @@ fn test_serde_deserialization_type_mismatch() {
 fn test_serde_missing_required_field() {
     #[derive(Debug, Deserialize)]
     struct Expected {
-        required: String,
+        _required: String,
     }
 
     let cosy_text = r#"{ other_field: "value" }"#;
@@ -601,7 +609,7 @@ fn test_serde_missing_required_field() {
 fn test_serde_error_message_helpful() {
     #[derive(Debug, Deserialize)]
     struct Data {
-        value: i32,
+        _value: i32,
     }
 
     let cosy_text = r#"{ value: "string" }"#;
