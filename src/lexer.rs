@@ -47,6 +47,7 @@ pub enum Token {
     RightBracket, // ]
     Colon,        // :
     Comma,        // ,
+    Newline,      // \n
 
     // End of input
     Eof,
@@ -68,6 +69,7 @@ impl fmt::Display for Token {
             Token::RightBracket => write!(f, "]"),
             Token::Colon => write!(f, ":"),
             Token::Comma => write!(f, ","),
+            Token::Newline => write!(f, "newline"),
             Token::Eof => write!(f, "EOF"),
         }
     }
@@ -141,6 +143,10 @@ impl Lexer {
         let ch = self.current_char();
 
         match ch {
+            '\n' => {
+                self.advance();
+                Ok(Token::Newline)
+            }
             '{' => {
                 self.advance();
                 Ok(Token::LeftBrace)
@@ -323,9 +329,6 @@ impl Lexer {
         while !self.is_at_end() {
             match self.current_char() {
                 ' ' | '\t' | '\r' => self.advance(),
-                '\n' => {
-                    self.advance(); // advance() will handle the newline tracking
-                }
                 '/' if self.peek_next() == Some('/') => {
                     // Skip comment until end of line
                     while !self.is_at_end() && self.current_char() != '\n' {
@@ -409,7 +412,8 @@ mod tests {
         );
 
         assert_eq!(tokens[0].pos, Position::new(1, 1)); // true on line 1, col 1
-        assert_eq!(tokens[1].pos, Position::new(2, 1)); // false on line 2, col 1
+        assert_eq!(tokens[1].pos, Position::new(1, 5)); // \n on line 1, col 5
+        assert_eq!(tokens[2].pos, Position::new(2, 1)); // false on line 2, col 1 (after newline)
     }
 
     #[test]
@@ -433,10 +437,12 @@ age: 30
 
         // a should be at line 1
         assert_eq!(tokens[0].pos.line, 1);
-        // b should be at line 2
-        assert_eq!(tokens[1].pos.line, 2);
-        // c should be at line 3
-        assert_eq!(tokens[2].pos.line, 3);
+        // \n at index 1
+        // b should be at line 2 (index 2)
+        assert_eq!(tokens[2].pos.line, 2);
+        // \n at index 3
+        // c should be at line 3 (index 4)
+        assert_eq!(tokens[4].pos.line, 3);
     }
 
     #[test]
@@ -457,6 +463,6 @@ age: 30
         let tokens = lexer.tokenize().unwrap();
 
         assert_eq!(tokens[0].pos, Position::new(1, 1)); // abc at line 1, col 1
-        assert_eq!(tokens[1].pos, Position::new(2, 1)); // def at line 2, col 1
+        assert_eq!(tokens[2].pos, Position::new(2, 1)); // def at line 2, col 1 (index 2 because of newline at index 1)
     }
 }

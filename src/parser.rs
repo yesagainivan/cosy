@@ -41,7 +41,10 @@ impl Parser {
 
     /// Parse a complete COSY document
     pub fn parse(&mut self) -> Result<Value, ParseError> {
+        self.skip_newlines(); // Allow leading newlines
         let value = self.parse_value()?;
+
+        self.skip_newlines(); // Allow trailing newlines
 
         // Ensure we've consumed all tokens (EOF should be next)
         if !matches!(self.current_token(), Token::Eof) {
@@ -147,16 +150,14 @@ impl Parser {
         }
     }
 
-    /// Check if there's a newline before current token
-    fn has_newline_before_current(&self) -> bool {
-        if self.position == 0 {
-            return false;
+    /// Skip any number of newlines, returning true if any were skipped
+    fn skip_newlines(&mut self) -> bool {
+        let mut skipped = false;
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
+            skipped = true;
         }
-
-        let current_line = self.current_position().line;
-        let prev_line = self.tokens[self.position - 1].pos.line;
-
-        current_line > prev_line
+        skipped
     }
 
     /// Parse an object with optional commas after newlines
@@ -165,13 +166,15 @@ impl Parser {
 
         let mut object = IndexMap::new();
 
-        // Handle empty object
-        if matches!(self.current_token(), Token::RightBrace) {
-            self.advance();
-            return Ok(Value::Object(object));
-        }
-
         loop {
+            self.skip_newlines();
+
+            // Handle empty object or end of object
+            if matches!(self.current_token(), Token::RightBrace) {
+                self.advance();
+                return Ok(Value::Object(object));
+            }
+
             // Parse key (identifier or string)
             let key = match &self.current_token() {
                 Token::Identifier(s) => {
@@ -199,30 +202,25 @@ impl Parser {
             let value = self.parse_value()?;
             object.insert(key, value);
 
-            // Check for comma, newline, or end of object
-            match &self.current_token() {
-                Token::Comma => {
-                    self.advance();
-                    // Allow trailing comma before }
-                    if matches!(self.current_token(), Token::RightBrace) {
-                        self.advance();
-                        break;
-                    }
-                }
-                Token::RightBrace => {
-                    self.advance();
-                    break;
-                }
-                _ if self.has_newline_before_current() => {
-                    // Newline acts as separator, continue parsing next key
-                    continue;
-                }
-                token => {
-                    return Err(self.error_at_current(format!(
-                        "Expected ',' or '}}' in object, found {}",
-                        token
-                    )));
-                }
+            // Check for separator (comma or newline)
+            let mut has_sep = self.skip_newlines();
+
+            if matches!(self.current_token(), Token::Comma) {
+                self.advance();
+                has_sep = true;
+                self.skip_newlines();
+            }
+
+            if matches!(self.current_token(), Token::RightBrace) {
+                self.advance();
+                break;
+            }
+
+            if !has_sep {
+                return Err(self.error_at_current(format!(
+                    "Expected ',' or '}}' in object, found {}",
+                    self.current_token()
+                )));
             }
         }
 
@@ -235,41 +233,38 @@ impl Parser {
 
         let mut array = Vec::new();
 
-        // Handle empty array
-        if matches!(self.current_token(), Token::RightBracket) {
-            self.advance();
-            return Ok(Value::Array(array));
-        }
-
         loop {
+            self.skip_newlines();
+
+            // Handle empty array or end of array
+            if matches!(self.current_token(), Token::RightBracket) {
+                self.advance();
+                return Ok(Value::Array(array));
+            }
+
             // Parse value
             let value = self.parse_value()?;
             array.push(value);
 
-            // Check for comma, newline, or end of array
-            match &self.current_token() {
-                Token::Comma => {
-                    self.advance();
-                    // Allow trailing comma before ]
-                    if matches!(self.current_token(), Token::RightBracket) {
-                        self.advance();
-                        break;
-                    }
-                }
-                Token::RightBracket => {
-                    self.advance();
-                    break;
-                }
-                _ if self.has_newline_before_current() => {
-                    // Newline acts as separator, continue parsing next value
-                    continue;
-                }
-                token => {
-                    return Err(self.error_at_current(format!(
-                        "Expected ',' or ']' in array, found {}",
-                        token
-                    )));
-                }
+            // Check for separator
+            let mut has_sep = self.skip_newlines();
+
+            if matches!(self.current_token(), Token::Comma) {
+                self.advance();
+                has_sep = true;
+                self.skip_newlines();
+            }
+
+            if matches!(self.current_token(), Token::RightBracket) {
+                self.advance();
+                break;
+            }
+
+            if !has_sep {
+                return Err(self.error_at_current(format!(
+                    "Expected ',' or ']' in array, found {}",
+                    self.current_token()
+                )));
             }
         }
 

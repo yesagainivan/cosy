@@ -432,7 +432,8 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
-- **1.0.0** (Current) - Initial specification with full Serde support and comprehensive error handling
+- **1.1.0** - Architectural overhaul: explicit newline tokenization for robust parsing
+- **1.0.0** - Initial specification with full Serde support and comprehensive error handling
 
 ---
 
