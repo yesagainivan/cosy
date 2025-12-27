@@ -44,6 +44,8 @@
 
 pub mod error;
 pub mod include;
+pub mod load;
+pub mod merge;
 pub mod schema;
 pub mod serde;
 pub mod syntax;
@@ -55,4 +57,5 @@ pub use value::Value;
 
 // Re-export Serde support for backward compatibility if desired, or point to new paths
 // The previous serializer exports:
+pub use load::load_and_merge;
 pub use serde::serializer::{SerializeOptions, to_string, to_string_with_options};

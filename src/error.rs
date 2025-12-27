@@ -11,6 +11,10 @@ pub enum CosynError {
     Lex(lexer::LexError),
     /// A parsing error (tokens couldn't be converted to a value)
     Parse(parser::ParseError),
+    /// An IO error occurred (e.g. read failure)
+    Io(String),
+    /// An error occurred during include resolution
+    Include(String),
 }
 
 impl fmt::Display for CosynError {
@@ -18,6 +22,8 @@ impl fmt::Display for CosynError {
         match self {
             CosynError::Lex(e) => write!(f, "{}", e),
             CosynError::Parse(e) => write!(f, "{}", e),
+            CosynError::Io(e) => write!(f, "IO error: {}", e),
+            CosynError::Include(msg) => write!(f, "Include error: {}", msg),
         }
     }
 }
@@ -27,6 +33,12 @@ impl std::error::Error for CosynError {}
 impl From<lexer::LexError> for CosynError {
     fn from(e: lexer::LexError) -> Self {
         CosynError::Lex(e)
+    }
+}
+
+impl From<std::io::Error> for CosynError {
+    fn from(e: std::io::Error) -> Self {
+        CosynError::Io(e.to_string())
     }
 }
 
@@ -42,6 +54,7 @@ impl CosynError {
         match self {
             CosynError::Lex(e) => e.line,
             CosynError::Parse(e) => e.line,
+            _ => 0,
         }
     }
 
@@ -50,14 +63,17 @@ impl CosynError {
         match self {
             CosynError::Lex(e) => e.column,
             CosynError::Parse(e) => e.column,
+            _ => 0,
         }
     }
 
     /// Get the error message.
-    pub fn message(&self) -> &str {
+    pub fn message(&self) -> String {
         match self {
-            CosynError::Lex(e) => &e.message,
-            CosynError::Parse(e) => &e.message,
+            CosynError::Lex(e) => e.message.clone(),
+            CosynError::Parse(e) => e.message.clone(),
+            CosynError::Io(e) => e.to_string(),
+            CosynError::Include(msg) => msg.clone(),
         }
     }
 }

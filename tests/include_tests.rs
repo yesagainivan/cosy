@@ -1,6 +1,5 @@
 use cosy::{Value, from_str, include};
 use std::fs;
-use std::path::Path;
 use tempfile::tempdir;
 
 #[test]

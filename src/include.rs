@@ -1,3 +1,4 @@
+use crate::merge;
 use crate::syntax::parser;
 use crate::value::Value;
 use std::error::Error;
@@ -85,14 +86,32 @@ fn resolve_recursive(
 
                 // 4. Merge
                 // The included value MUST be an object to merge into our current object
-                if let Value::Object(mut included_map) = included_value {
+                if let Value::Object(included_map) = included_value {
                     // We merge CURRENT fields INTO included map.
                     // Local fields override included fields.
-                    for (k, v) in map.drain(..) {
-                        included_map.insert(k, v);
+                    // We merge included map INTO current map.
+                    // But wait: we want Local fields to override Included fields.
+                    // The `merge(base, override)` function merges override INTO base.
+                    //
+                    // Current state:
+                    // `map`: contains local fields (minus "include" key)
+                    // `included_map`: contains fields from included file
+                    //
+                    // We want: Local Config > Included Config
+                    // So we should treat `included_map` as BASE and `map` (local) as OVERRIDE.
+
+                    // 1. Let's swap the content so included_map becomes the base for our final result
+                    // We can move all items from map into included_map using merge,
+                    // treating `included_map` as BASE and `map` as OVERRIDE.
+                    let local_overrides = Value::Object(std::mem::take(map));
+                    let mut base_included = Value::Object(included_map);
+
+                    merge::merge(&mut base_included, local_overrides);
+
+                    // 2. Now put the result back into `map` (which is `value`'s internal map)
+                    if let Value::Object(merged_map) = base_included {
+                        *map = merged_map;
                     }
-                    // Replace current map with the merged included map
-                    *map = included_map;
                 } else {
                     return Err(IncludeError::InvalidIncludeTarget(format!(
                         "Included file '{}' must be an Object, found {}",

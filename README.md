@@ -432,6 +432,7 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
+- **1.5.0** - Added Config Merging (`cosy::load_and_merge`) and Deep Merge logic.
 - **1.4.0** - Added Config File Inclusion (`cosy::include`).
 - **1.3.0** - Added Schema Validation (`cosy::schema::validate`).
 - **1.2.0** - Added Environment Variable Interpolation (`${VAR}`) with type inference.
@@ -467,11 +468,7 @@ These features would enhance COSY for production config management without chang
 - Suggest corrections: "Unknown key 'port'; did you mean 'ports'?"
 - Useful for catching accidental misconfigurations
 
-**5. Config Merging**
-- Load and merge multiple config files
-- Support for: deep merge, array concatenation, override behavior
-- Example: `load_and_merge(&["base.cosy", "overrides.cosy"])?`
-- Perfect for: environment-specific configs, feature flags, local development overrides
+
 
 ### Considered (Lower Priority)
 
