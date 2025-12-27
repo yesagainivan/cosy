@@ -25,4 +25,10 @@ fn main() {
 
     println!("\n--- Parsed Struct ---");
     println!("{:#?}", config);
+
+    println!("\n--- Usage ---");
+    println!("Username: {}", config.username);
+    println!("Theme: {}", config.theme);
+    println!("Notifications enabled: {}", config.notifications_enabled);
+    println!("Retry count: {}", config.retry_count);
 }

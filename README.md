@@ -432,6 +432,7 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
+- **1.2.0** - Added Environment Variable Interpolation (`${VAR}`) with type inference.
 - **1.1.0** - Architectural overhaul: explicit newline tokenization for robust parsing
 - **1.0.0** - Initial specification with full Serde support and comprehensive error handling
 
@@ -449,10 +450,10 @@ These features would enhance COSY for production config management without chang
 - Example: `cosy::validate(&config, &schema)?`
 - Would support: required fields, type constraints, value ranges, regex patterns for strings
 
-**2. Environment Variable Interpolation**
-- Reference environment variables in configs
-- Example: `database_url: "${DB_URL}"` or `database_url: "$${DB_URL}"`
-- Useful for secrets and environment-specific settings without duplicating configs
+**2. Environment Variable Interpolation** (Completed v1.2.0)
+- ✅ Reference environment variables in configs
+- ✅ Example: `database_url: "${DB_URL}"` or `database_url: "$${DB_URL}"`
+- ✅ Useful for secrets and environment-specific settings without duplicating configs
 
 **3. Config File Inclusion**
 - Include other COSY files to avoid repetition

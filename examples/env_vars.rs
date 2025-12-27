@@ -44,6 +44,12 @@ fn main() {
     println!("\n--- Parsed Struct ---");
     println!("{:#?}", config);
 
+    println!("\n--- Usage ---");
+    println!("Host: {}", config.host);
+    println!("Port: {}", config.port);
+    println!("API Key: {}", config.api_key);
+    println!("Debug Mode: {}", config.debug_mode);
+
     // Cleanup
     unsafe {
         env::remove_var("HOST");
