@@ -3,6 +3,7 @@
 
 use cosy::parser::from_str;
 use cosy::{CosynError, Value};
+use indexmap::IndexMap;
 
 // ============================================================================
 // BASIC VALUE PARSING TESTS
@@ -161,7 +162,7 @@ fn test_array_newlines_as_separators() {
 #[test]
 fn test_empty_object() {
     let value = from_str("{}").unwrap();
-    assert_eq!(value, Value::Object(std::collections::HashMap::new()));
+    assert_eq!(value, Value::Object(IndexMap::new()));
 }
 
 #[test]

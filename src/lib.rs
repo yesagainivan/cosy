@@ -11,6 +11,7 @@
 //! - **Type distinction**: Separate integers from floats, proper null support
 //! - **Detailed error messages**: Accurate line/column information
 //! - **Full Serde support**: Automatic serialization/deserialization to Rust structs
+//! - **Preserved key order**: Object keys maintain insertion order
 //!
 //! ## Example with Serde
 //!
@@ -46,7 +47,7 @@ pub mod parser;
 pub mod serde_support;
 pub mod serializer;
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::fmt;
 
 /// COSY Value type - the core data structure representing any COSY value.
@@ -58,7 +59,7 @@ use std::fmt;
 /// - Floating-point numbers
 /// - UTF-8 strings
 /// - Arrays of values
-/// - Objects (key-value maps)
+/// - Objects (key-value maps with insertion-order preservation)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// Null value
@@ -73,8 +74,8 @@ pub enum Value {
     String(String),
     /// Homogeneous array of values
     Array(Vec<Value>),
-    /// Object (map) with string keys
-    Object(HashMap<String, Value>),
+    /// Object (map) with string keys, preserving insertion order
+    Object(IndexMap<String, Value>),
 }
 
 impl fmt::Display for Value {

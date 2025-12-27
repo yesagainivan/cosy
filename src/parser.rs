@@ -1,6 +1,6 @@
 use crate::lexer::{Lexer, Position, Token, TokenWithPos};
 use crate::{CosynError, Value};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::error::Error;
 use std::fmt;
 
@@ -146,13 +146,7 @@ impl Parser {
             column: pos.column,
         }
     }
-}
 
-/// Parser changes to handle optional commas after newlines
-
-// In parser.rs, add this helper method:
-
-impl Parser {
     /// Check if there's a newline before current token
     fn has_newline_before_current(&self) -> bool {
         if self.position == 0 {
@@ -169,7 +163,7 @@ impl Parser {
     fn parse_object(&mut self) -> Result<Value, ParseError> {
         self.expect(Token::LeftBrace, "Expected '{' to start object")?;
 
-        let mut object = HashMap::new();
+        let mut object = IndexMap::new();
 
         // Handle empty object
         if matches!(self.current_token(), Token::RightBrace) {
@@ -336,6 +330,25 @@ mod tests {
             Value::Object(obj) => {
                 assert_eq!(obj.get("name"), Some(&Value::String("Alice".to_string())));
                 assert_eq!(obj.get("age"), Some(&Value::Integer(30)));
+            }
+            _ => panic!("Expected object"),
+        }
+    }
+
+    #[test]
+    fn test_key_order_preservation() {
+        let input = r#"{
+        first: 1
+        second: 2
+        third: 3
+        fourth: 4
+    }"#;
+        let value = from_str(input).unwrap();
+
+        match value {
+            Value::Object(obj) => {
+                let keys: Vec<&String> = obj.keys().collect();
+                assert_eq!(keys, vec!["first", "second", "third", "fourth"]);
             }
             _ => panic!("Expected object"),
         }

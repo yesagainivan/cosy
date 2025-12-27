@@ -1,5 +1,5 @@
 use crate::Value;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// Serialization options for controlling output format
 #[derive(Debug, Clone)]
@@ -126,7 +126,7 @@ impl Serializer {
         result
     }
 
-    fn serialize_object(&mut self, obj: &HashMap<String, Value>) -> String {
+    fn serialize_object(&mut self, obj: &IndexMap<String, Value>) -> String {
         if obj.is_empty() {
             return "{}".to_string();
         }
@@ -264,13 +264,13 @@ mod tests {
 
     #[test]
     fn test_serialize_empty_object() {
-        let obj = Value::Object(std::collections::HashMap::new());
+        let obj = Value::Object(IndexMap::new());
         assert_eq!(to_string(&obj), "{}");
     }
 
     #[test]
     fn test_serialize_simple_object() {
-        let mut obj = HashMap::new();
+        let mut obj = IndexMap::new();
         obj.insert("name".to_string(), Value::String("Alice".to_string()));
         obj.insert("age".to_string(), Value::Integer(30));
         let value = Value::Object(obj);
@@ -283,12 +283,30 @@ mod tests {
     }
 
     #[test]
+    fn test_serialize_object_key_order() {
+        let mut obj = IndexMap::new();
+        obj.insert("first".to_string(), Value::Integer(1));
+        obj.insert("second".to_string(), Value::Integer(2));
+        obj.insert("third".to_string(), Value::Integer(3));
+        let value = Value::Object(obj);
+
+        let output = to_string(&value);
+        // Keys should appear in insertion order
+        let first_pos = output.find("first").expect("missing 'first'");
+        let second_pos = output.find("second").expect("missing 'second'");
+        let third_pos = output.find("third").expect("missing 'third'");
+
+        assert!(first_pos < second_pos);
+        assert!(second_pos < third_pos);
+    }
+
+    #[test]
     fn test_serialize_nested_structure() {
-        let mut inner = HashMap::new();
+        let mut inner = IndexMap::new();
         inner.insert("x".to_string(), Value::Integer(1));
         inner.insert("y".to_string(), Value::Integer(2));
 
-        let mut outer = HashMap::new();
+        let mut outer = IndexMap::new();
         outer.insert("point".to_string(), Value::Object(inner));
         let value = Value::Object(outer);
 

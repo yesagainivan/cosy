@@ -1,1 +1,17 @@
+# Ignore the target directory
 /target
+
+# Ignore the .env file
+.env
+
+
+# Ignore all archive files
+*.zip
+*.tar.gz
+*.tar
+*.rar
+*.7z
+
+# Ignore other files
+*.DS_Store
+

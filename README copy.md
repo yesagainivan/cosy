@@ -15,11 +15,10 @@ A human-friendly configuration format designed to be more pleasant to write and 
 5. [Example Document](#5-example-document)
 6. [Serde Integration](#6-serde-integration)
 7. [Comparison with JSON](#7-comparison-with-json)
-8. [Use Cases & Design Philosophy](#8-use-cases--design-philosophy)
+8. [Limitations](#8-limitations)
 9. [Error Reporting](#9-error-reporting)
-10. [Production Readiness](#10-production-readiness)
+10. [Use Cases](#10-use-cases)
 11. [Version History](#11-version-history)
-12. [Future Roadmap](#12-future-roadmap)
 
 ---
 
@@ -267,33 +266,21 @@ enum Value {
 // Struct { a: i32, b: String }    - struct variants
 ```
 
-### Key Order Preservation
-
-**COSY now preserves object key order!** Objects maintain insertion-order semantics, so your config keys will appear in the same order they were defined:
-
-```cosy
-{
-    version: "1.0.0"      // First
-    name: "MyApp"         // Second
-    debug: true           // Third
-}
-```
-
-When serialized and deserialized, this order is maintained. This makes COSY ideal for configuration files where logical grouping matters.
-
-### Important Design Choices
+### Important Limitations
 
 1. **Enums**: Only unit and newtype variants work. Tuple and struct variants will error during deserialization with a message like "tuple variants not supported; use newtype or unit variants".
 
 2. **Map Keys**: Only `String` keys are supported. Attempting to use non-string keys will fail with "keys must be strings".
 
-3. **Comments**: Comments in the original COSY are stripped during parsing. Roundtrip serialization will not preserve comments.
+3. **Object Key Order**: Key order in objects is **not preserved** (unordered HashMap behavior). Roundtrip serialization will not maintain the original key order.
 
-4. **Number Precision**:
+4. **Comments**: Comments in the original COSY are stripped during parsing. Roundtrip serialization will not preserve comments.
+
+5. **Number Precision**:
    - Integers are stored as `i64` (64-bit signed). Large unsigned integers beyond `i64::MAX` will lose precision.
    - Floats are stored as `f64` (IEEE 754). Values are limited to ~15 significant digits.
 
-5. **Custom Serialization**: Serde's `#[serde(rename)]`, `#[serde(skip)]`, and other attributes are fully supported, allowing fine-grained control over serialization.
+6. **Custom Serialization**: Serde's `#[serde(rename)]`, `#[serde(skip)]`, and other attributes are fully supported, allowing fine-grained control over serialization.
 
 ---
 
@@ -305,7 +292,6 @@ When serialized and deserialized, this order is maintained. This makes COSY idea
 | Unquoted keys | ❌ | ✅ `name: value` |
 | Trailing commas | ❌ | ✅ `[1, 2,]` |
 | Newline separators | ❌ | ✅ Can replace commas |
-| Preserved key order | ❌ | ✅ Insertion-order maintained |
 | Integer distinction | ❌ (all numbers) | ✅ `42` vs `3.14` |
 | Null support | ✅ | ✅ |
 | Strings | ✅ | ✅ |
@@ -315,54 +301,26 @@ When serialized and deserialized, this order is maintained. This makes COSY idea
 
 ---
 
-## 8. Use Cases & Design Philosophy
+## 8. Limitations
 
-## Best Use Cases
+### Data Type Limitations
 
-COSY excels as a **human-first configuration language**:
+- **No duplicate key handling**: If an object has duplicate keys, the last value wins (standard HashMap behavior).
+- **String-only map keys**: Arbitrary key types are not supported; only `String` keys work in Serde integration.
+- **Enum variants**: Complex enum variants (tuple, struct) are not supported for configuration use cases.
+- **Bytes**: `&[u8]` is serialized as an array of integers `[0, 1, 2, ...]`, not as a string.
 
-- **Application Config Files**: Server settings, database URLs, feature flags, logging levels
-- **Build System Configs**: Makefiles, build pipelines, deployment manifests
-- **Game/Asset Configs**: Level settings, character stats, world properties
-- **Settings Files**: Any config where humans will write, review, and git-track the file
-- **Documentation Examples**: Config files in READMEs and docs (human-readable by design)
+### Format Limitations
 
-### Why COSY for Configs?
+- **Comments are not preserved**: Roundtrip serialization (parse → serialize) strips all comments.
+- **Whitespace normalization**: Original formatting is not preserved; serialization uses standard indentation.
+- **Float formatting**: Floats use Rust's default `to_string()` formatting, which may differ from the original input.
+- **No custom precision control**: Float output precision cannot be customized per field.
 
-| Need | Solution |
-|------|----------|
-| Comments in config | ✓ COSY (JSON ✗) |
-| Readable by non-programmers | ✓ COSY (YAML is complex) |
-| Easy to parse | ✓ COSY (YAML ambiguous) |
-| Type clarity (int vs float) | ✓ COSY (JSON blurs this) |
-| Key order preservation | ✓ COSY (JSON ✗) |
-| Fast to implement | ✓ COSY (~500 LOC) |
+### Serialization Limitations
 
-## When NOT to Use COSY
-
-These aren't limitations—they're intentional design choices:
-
-**Don't use COSY for...**
-1. **General data serialization** - If you need to serialize arbitrary Rust types (DateTime, UUID, custom structs with complex logic), use JSON or bincode. COSY targets *configuration*, not *serialization*.
-
-2. **Preserving comments during roundtrip** - COSY strips comments during parsing (like all formats except YAML). This is intentional: comments are for *reading* configs, not preserving metadata.
-
-3. **Non-string map keys** - Only `String` keys are supported. This keeps configs simple and auditable. If you need int/enum keys, you probably need a database, not a config file.
-
-4. **Complex enum variants** - Only unit and newtype variants. Struct variants shouldn't appear in configs (put complex logic in code, not data files).
-
-## The Philosophy
-
-**COSY is opinionated about what configs should be:**
-- Human-readable and hand-editable ✓
-- Type-safe when deserialized ✓
-- Auditable (no hidden complexity) ✓
-- Simple to implement (no external deps for parsing) ✓
-
-**COSY is NOT:**
-- A replacement for general serialization (use JSON/bincode)
-- A data interchange format (use JSON)
-- A general-purpose markup language (use YAML for that complexity)
+- **Unordered keys**: Object keys are output in arbitrary order (HashMap iteration order).
+- **No format options**: Serialization always uses default formatting (4-space indentation, newlines as separators). Use `crate::to_string_with_options()` to customize.
 
 ---
 
@@ -387,17 +345,20 @@ let result: Result<Config, _> = serde_support::from_str("{ port: \"not a number\
 
 ---
 
-## 10. Production Readiness
+## 10. Use Cases
 
-COSY is **production-ready for configuration files**:
+COSY is ideal for:
+- **Configuration files** (better than JSON, simpler than YAML)
+- **Data serialization** (more human-friendly than JSON)
+- **Game assets** (fast to write by hand)
+- **Build system configs** (comments for documentation)
+- **Settings files** (with Serde integration for type-safe deserialization)
 
-✓ Comprehensive error messages with line/column info
-✓ Full Serde integration for type-safe deserialization
-✓ Key order preservation (critical for readable configs)
-✓ Extensive test coverage (95+ tests)
-✓ No external dependencies (fast, small, auditable)
-
-If your use case is "I need a human-friendly config format", COSY is ready today.
+**COSY is NOT recommended for:**
+- Complex type serialization (use JSON or bincode)
+- Preserving comments (original comments are lost during roundtrip)
+- Non-string map keys
+- Complex enum variants
 
 ---
 
@@ -433,74 +394,3 @@ separator = "," | newline | ("," newline) | (newline ",")
 ## 12. Version History
 
 - **1.0.0** (Current) - Initial specification with full Serde support and comprehensive error handling
-
----
-
-## 13. Future Roadmap
-
-### Planned Features (High Priority)
-
-These features would enhance COSY for production config management without changing the core format:
-
-**1. Schema Validation**
-- Validate config files against a declarative schema
-- Catch typos and type mismatches early
-- Example: `cosy::validate(&config, &schema)?`
-- Would support: required fields, type constraints, value ranges, regex patterns for strings
-
-**2. Environment Variable Interpolation**
-- Reference environment variables in configs
-- Example: `database_url: "${DB_URL}"` or `database_url: "$${DB_URL}"`
-- Useful for secrets and environment-specific settings without duplicating configs
-
-**3. Config File Inclusion**
-- Include other COSY files to avoid repetition
-- Example: `include: "shared/logging.cosy"`
-- Support for relative and absolute paths
-- Would enable: base configs, overrides, shared settings
-
-**4. Strict Mode & Linting**
-- Flag unknown keys (catch typos: `debg: true` instead of `debug`)
-- Warn about deprecated config keys
-- Suggest corrections: "Unknown key 'port'; did you mean 'ports'?"
-- Useful for catching accidental misconfigurations
-
-**5. Config Merging**
-- Load and merge multiple config files
-- Support for: deep merge, array concatenation, override behavior
-- Example: `load_and_merge(&["base.cosy", "overrides.cosy"])?`
-- Perfect for: environment-specific configs, feature flags, local development overrides
-
-### Considered (Lower Priority)
-
-**CLI Tool** - A command-line utility for:
-- Validating COSY files: `cosy validate config.cosy --schema schema.cosy`
-- Pretty-printing: `cosy format config.cosy --indent 2`
-- Converting to/from JSON: `cosy to-json config.cosy`
-- Checking against schema: `cosy check config.cosy --schema config.schema`
-
-**Comments Preservation** - Preserve comments during roundtrip serialization
-- Would require: tracking comment locations in AST
-- Useful for: programmatic config modification while keeping documentation
-- Trade-off: Added complexity for edge case
-
-**Custom Derive Macros** - `#[cosy(...)]` attributes for fine-grained control
-- Would support: field validation, custom deserialization, computed fields
-- Example: `#[cosy(validate = "port > 0 && port < 65536")]`
-
-### Not Planned
-
-**Complex Type Support** - COSY intentionally keeps types simple (primitives, strings, arrays, objects). Complex types belong in code or databases, not configs.
-
-**Binary Data** - COSY is text-based for auditability and version control friendliness.
-
-**Macro Language** - COSY is deliberately simple; complex logic belongs in application code.
-
----
-
-### Contributing to the Roadmap
-
-Have a feature idea? We'd love to hear it! Please open an issue describing:
-- Your use case
-- Why it would help (especially for configuration management)
-- How it fits COSY's philosophy of simplicity and human-readability

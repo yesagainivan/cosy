@@ -1,10 +1,11 @@
 // src/serde_support.rs
 
 use crate::{CosynError, Value};
+use indexmap::IndexMap;
 use serde::de::{self, Error as DeError, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Error as SeError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+// Removed: use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -285,12 +286,12 @@ impl<'de> SeqAccess<'de> for SeqDeserializer {
 }
 
 struct MapDeserializer {
-    iter: std::collections::hash_map::IntoIter<String, Value>,
+    iter: indexmap::map::IntoIter<String, Value>,
     value: Option<Value>,
 }
 
 impl MapDeserializer {
-    fn new(object: HashMap<String, Value>) -> Self {
+    fn new(object: IndexMap<String, Value>) -> Self {
         MapDeserializer {
             iter: object.into_iter(),
             value: None,
@@ -562,7 +563,7 @@ impl Serializer for ValueSerializer {
     where
         T: Serialize + ?Sized,
     {
-        let mut map = HashMap::new();
+        let mut map = IndexMap::new();
         map.insert(variant.to_string(), value.serialize(self)?);
         Ok(Value::Object(map))
     }
@@ -597,7 +598,7 @@ impl Serializer for ValueSerializer {
 
     fn serialize_map(self, len: Option<usize>) -> Result<SerializeObject, SerializeError> {
         Ok(SerializeObject {
-            object: HashMap::with_capacity(len.unwrap_or(0)),
+            object: IndexMap::with_capacity(len.unwrap_or(0)), // Changed from HashMap
             next_key: None,
         })
     }
@@ -618,7 +619,7 @@ impl Serializer for ValueSerializer {
         len: usize,
     ) -> Result<SerializeObject, SerializeError> {
         Ok(SerializeObject {
-            object: HashMap::with_capacity(len),
+            object: IndexMap::with_capacity(len), // Changed from HashMap
             next_key: Some(variant.to_string()),
         })
     }
@@ -697,7 +698,7 @@ impl serde::ser::SerializeTupleVariant for SerializeArray {
 }
 
 pub struct SerializeObject {
-    object: HashMap<String, Value>,
+    object: IndexMap<String, Value>,
     next_key: Option<String>,
 }
 
