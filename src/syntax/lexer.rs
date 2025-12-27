@@ -1,4 +1,4 @@
-use std::{error::Error, fmt};
+use std::{env, error::Error, fmt};
 
 /// Position information for a token
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,6 +172,7 @@ impl Lexer {
                 Ok(Token::Comma)
             }
             '"' => self.lex_string(),
+            '$' => self.lex_standalone_env_var(), // Check for environment variable
             '-' | '0'..='9' => self.lex_number(),
             'a'..='z' | 'A'..='Z' | '_' => self.lex_identifier(),
             _ => Err(self.error(format!("Unexpected character: '{}'", ch))),
@@ -196,6 +197,7 @@ impl Lexer {
                     'r' => '\r',
                     '\\' => '\\',
                     '"' => '"',
+                    '$' => '$', // Allow escaping $
                     _ => {
                         return Err(self.error(format!(
                             "Invalid escape sequence: \\{}",
@@ -205,6 +207,20 @@ impl Lexer {
                 };
                 result.push(escaped);
                 self.advance();
+            } else if self.current_char() == '$' && self.peek_next() == Some('{') {
+                // Environment variable interpolation
+                self.advance(); // consume '$'
+                self.advance(); // consume '{'
+                let var_name = self.read_env_var_name()?;
+
+                match env::var(&var_name) {
+                    Ok(val) => result.push_str(&val),
+                    Err(_) => {
+                        return Err(
+                            self.error(format!("Environment variable not found: {}", var_name))
+                        );
+                    }
+                }
             } else {
                 result.push(self.current_char());
                 self.advance();
@@ -322,6 +338,63 @@ impl Lexer {
         };
 
         Ok(token)
+    }
+
+    /// Read environment variable name (inside ${...})
+    fn read_env_var_name(&mut self) -> Result<String, LexError> {
+        let mut name = String::new();
+        while !self.is_at_end() && self.current_char() != '}' {
+            // Allow alphanumeric and underscore
+            if self.current_char().is_alphanumeric() || self.current_char() == '_' {
+                name.push(self.current_char());
+                self.advance();
+            } else {
+                return Err(self.error(format!(
+                    "Invalid character in environment variable name: '{}'",
+                    self.current_char()
+                )));
+            }
+        }
+
+        if self.is_at_end() {
+            return Err(self.error("Unterminated environment variable: missing '}'".to_string()));
+        }
+
+        self.advance(); // Consume '}'
+        Ok(name)
+    }
+
+    /// Lex a standalone environment variable with type inference
+    fn lex_standalone_env_var(&mut self) -> Result<Token, LexError> {
+        self.advance(); // Consume '$'
+
+        if self.current_char() != '{' {
+            return Err(self.error("Expected '{' after '$'".to_string()));
+        }
+        self.advance(); // Consume '{'
+
+        let var_name = self.read_env_var_name()?;
+        let value_str = match env::var(&var_name) {
+            Ok(val) => val,
+            Err(_) => {
+                return Err(self.error(format!("Environment variable not found: {}", var_name)));
+            }
+        };
+
+        // Type inference
+        if value_str == "true" {
+            Ok(Token::True)
+        } else if value_str == "false" {
+            Ok(Token::False)
+        } else if value_str == "null" {
+            Ok(Token::Null)
+        } else if let Ok(i) = value_str.parse::<i64>() {
+            Ok(Token::Integer(i))
+        } else if let Ok(f) = value_str.parse::<f64>() {
+            Ok(Token::Float(f))
+        } else {
+            Ok(Token::String(value_str))
+        }
     }
 
     /// Skip whitespace and comments - FIXED to not double-count newlines
