@@ -432,6 +432,7 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
+- **1.4.0** - Added Config File Inclusion (`cosy::include`).
 - **1.3.0** - Added Schema Validation (`cosy::schema::validate`).
 - **1.2.0** - Added Environment Variable Interpolation (`${VAR}`) with type inference.
 - **1.1.0** - Architectural overhaul: explicit newline tokenization for robust parsing
@@ -455,11 +456,10 @@ These features would enhance COSY for production config management without chang
 - ✅ Example: `database_url: "${DB_URL}"` or `database_url: "$${DB_URL}"`
 - ✅ Useful for secrets and environment-specific settings without duplicating configs
 
-**3. Config File Inclusion**
-- Include other COSY files to avoid repetition
-- Example: `include: "shared/logging.cosy"`
-- Support for relative and absolute paths
-- Would enable: base configs, overrides, shared settings
+**3. Config File Inclusion** (Completed v1.4.0)
+- ✅ Include other COSY files to avoid repetition
+- ✅ Example: `include: "shared/logging.cosy"`
+- ✅ Support for relative paths and overrides
 
 **4. Strict Mode & Linting**
 - Flag unknown keys (catch typos: `debg: true` instead of `debug`)
