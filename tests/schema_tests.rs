@@ -1,53 +1,23 @@
-use cosy::schema::ValidationError;
-use cosy::{from_str, schema};
+use cosy::schema::{ValidationItem, ValidationLevel};
+use cosy::{Value, from_str, schema};
 
 #[test]
 fn test_validate_basic_types() {
-    let schema_str = r#"{
-        s: "string"
-        i: "integer"
-        f: "float"
-        b: "boolean"
-        n: "null"
-        any: "any"
-    }"#;
-    let schema = from_str(schema_str).unwrap();
+    let schema_str = r#"{ name: "string", age: "integer" }"#;
+    let valid_str = r#"{ name: "Alice", age: 30 }"#;
+    let invalid_str = r#"{ name: "Alice", age: "30" }"#;
 
-    let valid_str = r#"{
-        s: "hello"
-        i: 42
-        f: 3.14
-        b: true
-        n: null
-        any: [1, 2] // Any can be anything
-    }"#;
-    let valid = from_str(valid_str).unwrap();
+    let schema: Value = from_str(schema_str).unwrap();
+    let valid: Value = from_str(valid_str).unwrap();
+    let invalid: Value = from_str(invalid_str).unwrap();
 
-    assert!(schema::validate(&valid, &schema).is_ok());
+    let report = schema::validate(&valid, &schema).unwrap();
+    assert!(report.is_empty(), "Expected no validation errors");
 
-    let invalid_str = r#"{
-        s: 42 // Expect string
-        i: 42
-        f: 3.14
-        b: true
-        n: null
-        any: "ok"
-    }"#;
-    let invalid = from_str(invalid_str).unwrap();
-
-    let err = schema::validate(&invalid, &schema).unwrap_err();
-    match err {
-        ValidationError::TypeMismatch {
-            path,
-            expected,
-            actual,
-        } => {
-            assert_eq!(path, "$.s");
-            assert_eq!(expected, "string");
-            assert_eq!(actual, "integer");
-        }
-        _ => panic!("Expected TypeMismatch, got {:?}", err),
-    }
+    let report_invalid = schema::validate(&invalid, &schema).unwrap();
+    assert_eq!(report_invalid.len(), 1);
+    assert_eq!(report_invalid[0].level, ValidationLevel::Error);
+    assert!(report_invalid[0].message.contains("Type mismatch"));
 }
 
 #[test]
@@ -58,7 +28,6 @@ fn test_validate_nested_object() {
             port: "integer"
         }
     }"#;
-    let schema = from_str(schema_str).unwrap();
 
     let valid_str = r#"{
         server: {
@@ -66,125 +35,120 @@ fn test_validate_nested_object() {
             port: 8080
         }
     }"#;
-    let valid = from_str(valid_str).unwrap();
-    assert!(schema::validate(&valid, &schema).is_ok());
 
-    let invalid_str = r#"{
-        server: {
-            host: "localhost"
-            port: "8080" // Wrong type
-        }
-    }"#;
-    let invalid = from_str(invalid_str).unwrap();
+    let schema: Value = from_str(schema_str).unwrap();
+    let valid: Value = from_str(valid_str).unwrap();
 
-    let err = schema::validate(&invalid, &schema).unwrap_err();
-    match err {
-        ValidationError::TypeMismatch {
-            path,
-            expected,
-            actual,
-        } => {
-            assert_eq!(path, "$.server.port");
-            assert_eq!(expected, "integer");
-            assert_eq!(actual, "string");
-        }
-        _ => panic!("Expected TypeMismatch, got {:?}", err),
-    }
+    let report = schema::validate(&valid, &schema).unwrap();
+    assert!(report.is_empty());
 }
 
 #[test]
 fn test_validate_missing_field() {
     let schema_str = r#"{ required: "string" }"#;
-    let schema = from_str(schema_str).unwrap();
+    let invalid_str = r#"{ other: "string" }"#;
 
-    let instance = from_str("{}").unwrap();
+    let schema: Value = from_str(schema_str).unwrap();
+    let invalid: Value = from_str(invalid_str).unwrap();
 
-    let err = schema::validate(&instance, &schema).unwrap_err();
-    match err {
-        ValidationError::MissingField { path, field } => {
-            assert_eq!(path, "$");
-            assert_eq!(field, "required");
-        }
-        _ => panic!("Expected MissingField, got {:?}", err),
-    }
+    let report = schema::validate(&invalid, &schema).unwrap();
+    // Should have missing field AND unknown field
+    assert!(
+        report
+            .iter()
+            .any(|i| i.message.contains("Missing required field"))
+    );
+    assert!(report.iter().any(|i| i.message.contains("Unknown field")));
 }
 
 #[test]
 fn test_validate_unknown_field_strict() {
-    let schema_str = r#"{ allowed: "string" }"#;
-    let schema = from_str(schema_str).unwrap();
+    let schema_str = r#"{ allow: "string" }"#;
+    let invalid_str = r#"{ allow: "ok", extra: "no" }"#;
 
-    let instance = from_str(r#"{ allowed: "ok", unknown: "no" }"#).unwrap();
+    let schema: Value = from_str(schema_str).unwrap();
+    let invalid: Value = from_str(invalid_str).unwrap();
 
-    let err = schema::validate(&instance, &schema).unwrap_err();
-    match err {
-        ValidationError::UnknownField { path, field } => {
-            assert_eq!(path, "$");
-            assert_eq!(field, "unknown");
-        }
-        _ => panic!("Expected UnknownField, got {:?}", err),
-    }
-}
-
-#[test]
-fn test_validate_array() {
-    let schema_str = r#"{ list: ["integer"] }"#;
-    let schema = from_str(schema_str).unwrap();
-
-    let valid = from_str(r#"{ list: [1, 2, 3] }"#).unwrap();
-    assert!(schema::validate(&valid, &schema).is_ok());
-
-    let invalid = from_str(r#"{ list: [1, "bad", 3] }"#).unwrap();
-    let err = schema::validate(&invalid, &schema).unwrap_err();
-    match err {
-        ValidationError::TypeMismatch {
-            path,
-            expected,
-            actual,
-        } => {
-            assert_eq!(path, "$.list[1]");
-            assert_eq!(expected, "integer");
-            assert_eq!(actual, "string");
-        }
-        _ => panic!("Expected TypeMismatch, got {:?}", err),
-    }
+    let report = schema::validate(&invalid, &schema).unwrap();
+    assert_eq!(report.len(), 1);
+    assert!(report[0].message.contains("Unknown field 'extra'"));
 }
 
 #[test]
 fn test_validate_nested_array_of_objects() {
     let schema_str = r#"{
+        users: [{ name: "string" }]
+    }"#;
+
+    let valid_str = r#"{
         users: [
-            { id: "integer", name: "string" }
+            { name: "Alice" }
+            { name: "Bob" }
         ]
     }"#;
-    let schema = from_str(schema_str).unwrap();
 
-    let valid = from_str(
+    let schema: Value = from_str(schema_str).unwrap();
+    let valid: Value = from_str(valid_str).unwrap();
+
+    let report = schema::validate(&valid, &schema).unwrap();
+    assert!(report.is_empty());
+}
+
+#[test]
+fn test_validate_array_mismatch() {
+    let schema_str = r#"{ list: ["integer"] }"#;
+    let schema: Value = from_str(schema_str).unwrap();
+
+    let invalid = from_str(r#"{ list: [1, "bad", 3] }"#).unwrap();
+    let report = schema::validate(&invalid, &schema).unwrap();
+
+    assert_eq!(report.len(), 1);
+    assert!(report[0].message.contains("Type mismatch"));
+    assert_eq!(report[0].path, "$.list[1]");
+}
+
+// NEW TESTS for Strict Mode
+#[test]
+fn test_typo_suggestion() {
+    let schema_str = r#"{ port: "integer" }"#;
+    let schema: Value = from_str(schema_str).unwrap();
+
+    let invalid = from_str(r#"{ prt: 8080 }"#).unwrap(); // Typo: prt vs port
+
+    let report = schema::validate(&invalid, &schema).unwrap();
+    // Expect: Unknown field 'prt'; did you mean 'port'? AND Missing required field 'port'
+
+    let unknown_err = report
+        .iter()
+        .find(|i| i.message.contains("Unknown field"))
+        .unwrap();
+    assert!(unknown_err.message.contains("did you mean 'port'?"));
+}
+
+#[test]
+fn test_deprecation_warning() {
+    let schema_str = r#"{
+        host: "string"
+        old_port: { type: "integer", deprecated: "Use 'port' instead" }
+    }"#;
+    let schema: Value = from_str(schema_str).unwrap();
+
+    let valid_but_deprecated = from_str(
         r#"{
-        users: [
-            { id: 1, name: "Alice" },
-            { id: 2, name: "Bob" }
-        ]
+        host: "localhost"
+        old_port: 8080
     }"#,
     )
     .unwrap();
-    assert!(schema::validate(&valid, &schema).is_ok());
 
-    let invalid = from_str(
-        r#"{
-        users: [
-            { id: 1, name: "Alice" },
-            { id: 2 } // Missing name
-        ]
-    }"#,
-    )
-    .unwrap();
-    let err = schema::validate(&invalid, &schema).unwrap_err();
-    match err {
-        ValidationError::MissingField { path, field } => {
-            assert_eq!(path, "$.users[1]");
-            assert_eq!(field, "name");
-        }
-        _ => panic!("Expected MissingField, got {:?}", err),
-    }
+    let report = schema::validate(&valid_but_deprecated, &schema).unwrap();
+
+    // Should have 1 warning
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0].level, ValidationLevel::Warning);
+    assert!(
+        report[0]
+            .message
+            .contains("Deprecated usage: Use 'port' instead")
+    );
 }

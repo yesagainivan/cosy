@@ -48,6 +48,7 @@ pub mod load;
 pub mod merge;
 pub mod schema;
 pub mod serde;
+pub mod suggest;
 pub mod syntax;
 pub mod value;
 

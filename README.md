@@ -432,6 +432,7 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
+- **1.6.0** - Added Strict Mode Features: Typo suggestions ("Did you mean...?") and Deprecation warnings.
 - **1.5.0** - Added Config Merging (`cosy::load_and_merge`) and Deep Merge logic.
 - **1.4.0** - Added Config File Inclusion (`cosy::include`).
 - **1.3.0** - Added Schema Validation (`cosy::schema::validate`).
@@ -462,11 +463,11 @@ These features would enhance COSY for production config management without chang
 - ✅ Example: `include: "shared/logging.cosy"`
 - ✅ Support for relative paths and overrides
 
-**4. Strict Mode & Linting**
-- Flag unknown keys (catch typos: `debg: true` instead of `debug`)
-- Warn about deprecated config keys
-- Suggest corrections: "Unknown key 'port'; did you mean 'ports'?"
-- Useful for catching accidental misconfigurations
+**4. Strict Mode & Linting** (Completed v1.6.0)
+- ✅ Flag unknown keys (catch typos: `debg: true` instead of `debug`)
+- ✅ Warn about deprecated config keys
+- ✅ Suggest corrections: "Unknown key 'port'; did you mean 'ports'?"
+- ✅ Useful for catching accidental misconfigurations
 
 
 

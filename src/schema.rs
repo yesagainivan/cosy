@@ -1,118 +1,132 @@
 use crate::value::Value;
 use std::fmt;
 
-/// Errors that can occur during schema validation
-#[derive(Debug, Clone)]
-pub enum ValidationError {
-    TypeMismatch {
-        path: String,
-        expected: String,
-        actual: String,
-    },
-    MissingField {
-        path: String,
-        field: String,
-    },
-    UnknownField {
-        path: String,
-        field: String,
-    },
-    InvalidSchema {
-        path: String,
-        message: String,
-    },
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidationLevel {
+    Error,
+    Warning,
 }
 
-impl fmt::Display for ValidationError {
+#[derive(Debug, Clone)]
+pub struct ValidationItem {
+    pub level: ValidationLevel,
+    pub path: String,
+    pub message: String,
+}
+
+impl fmt::Display for ValidationItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ValidationError::TypeMismatch {
-                path,
-                expected,
-                actual,
-            } => {
-                write!(
-                    f,
-                    "Type mismatch at '{}': expected {}, found {}",
-                    path, expected, actual
-                )
-            }
-            ValidationError::MissingField { path, field } => {
-                write!(f, "Missing required field '{}' at '{}'", field, path)
-            }
-            ValidationError::UnknownField { path, field } => {
-                write!(f, "Unknown field '{}' at '{}'", field, path)
-            }
-            ValidationError::InvalidSchema { path, message } => {
-                write!(f, "Invalid schema definition at '{}': {}", path, message)
-            }
-        }
+        let level_str = match self.level {
+            ValidationLevel::Error => "Error",
+            ValidationLevel::Warning => "Warning",
+        };
+        write!(f, "[{} at {}] {}", level_str, self.path, self.message)
     }
 }
 
-impl std::error::Error for ValidationError {}
+pub type ValidationReport = Vec<ValidationItem>;
 
 /// Validate a COSY value against a schema definition.
-///
-/// The schema is itself a COSY Value (typically an object) where:
-/// - Strings represent types: "string", "integer", "float", "boolean", "null", "any"
-/// - Arrays represent lists of a single type: ["string"] (array of strings)
-/// - Objects represent structural schemas: { name: "string", age: "integer" }
-///
-/// Optional fields can be denoted by appending '?' to the key name in the schema object,
-/// BUT since COSY keys are strings, we might need a convention.
-///
-/// For v1, let's stick to strict required fields.
-pub fn validate(instance: &Value, schema: &Value) -> Result<(), ValidationError> {
-    validate_recursive(instance, schema, "$")
+pub fn validate(instance: &Value, schema: &Value) -> Result<ValidationReport, ValidationItem> {
+    let mut report = Vec::new();
+    validate_recursive(instance, schema, "$", &mut report)?;
+    Ok(report)
 }
 
-fn validate_recursive(instance: &Value, schema: &Value, path: &str) -> Result<(), ValidationError> {
-    match schema {
-        // Schema is a type name string (e.g., "string", "integer")
-        Value::String(type_name) => validate_type(instance, type_name, path),
+fn validate_recursive(
+    instance: &Value,
+    schema: &Value,
+    path: &str,
+    report: &mut ValidationReport,
+) -> Result<(), ValidationItem> {
+    // 1. Resolve Extended Schema Syntax: { type: "string", deprecated: "msg" }
+    // If schema is an object with "type" key (and it's a string), treat it as extended definition.
+    let (effective_type_schema, deprecation) = if let Value::Object(schema_obj) = schema {
+        if let Some(Value::String(_)) = schema_obj.get("type") {
+            // It is an extended schema definition
+            let type_def = schema_obj.get("type").unwrap(); // We checked it exists
+            let deprecated_msg = if let Some(Value::String(msg)) = schema_obj.get("deprecated") {
+                Some(msg.clone())
+            } else {
+                None
+            };
+            (type_def, deprecated_msg)
+        } else {
+            // Just a structural object schema
+            (schema, None)
+        }
+    } else {
+        (schema, None)
+    };
 
-        // Schema is an object definition
+    // 2. Report Deprecation Warning if applicable
+    if let Some(msg) = deprecation {
+        report.push(ValidationItem {
+            level: ValidationLevel::Warning,
+            path: path.to_string(),
+            message: format!("Deprecated usage: {}", msg),
+        });
+    }
+
+    // 3. Validate Type / Structure
+    match effective_type_schema {
+        Value::String(type_name) => validate_type(instance, type_name, path, report),
+
         Value::Object(schema_obj) => {
             if let Value::Object(instance_obj) = instance {
-                // 1. Check that all required fields in schema exist in instance
+                // Check required fields
                 for (key, sub_schema) in schema_obj {
                     if !instance_obj.contains_key(key) {
-                        return Err(ValidationError::MissingField {
+                        report.push(ValidationItem {
+                            level: ValidationLevel::Error,
                             path: path.to_string(),
-                            field: key.clone(),
+                            message: format!("Missing required field '{}'", key),
                         });
+                    } else {
+                        validate_recursive(
+                            &instance_obj[key],
+                            sub_schema,
+                            &format!("{}.{}", path, key),
+                            report,
+                        )?;
                     }
-                    validate_recursive(
-                        &instance_obj[key],
-                        sub_schema,
-                        &format!("{}.{}", path, key),
-                    )?;
                 }
 
-                // 2. Check for unknown fields in instance (Strict Mode)
+                // Check unknown fields and typos
+                let schema_keys: Vec<String> = schema_obj.keys().cloned().collect();
                 for key in instance_obj.keys() {
                     if !schema_obj.contains_key(key) {
-                        return Err(ValidationError::UnknownField {
+                        let mut msg = format!("Unknown field '{}'", key);
+
+                        // Typo Suggestion
+                        if let Some(best_match) =
+                            crate::suggest::find_best_match(key, &schema_keys, 2)
+                        {
+                            msg.push_str(&format!("; did you mean '{}'?", best_match));
+                        }
+
+                        report.push(ValidationItem {
+                            level: ValidationLevel::Error,
                             path: path.to_string(),
-                            field: key.clone(),
+                            message: msg,
                         });
                     }
                 }
                 Ok(())
             } else {
-                Err(ValidationError::TypeMismatch {
+                report.push(ValidationItem {
+                    level: ValidationLevel::Error,
                     path: path.to_string(),
-                    expected: "object".to_string(),
-                    actual: instance.type_name().to_string(),
-                })
+                    message: format!("Expected object, found {}", instance.type_name()),
+                });
+                Ok(())
             }
         }
 
-        // Schema is an array definition (e.g., ["integer"])
         Value::Array(schema_arr) => {
             if schema_arr.len() != 1 {
-                return Err(ValidationError::InvalidSchema {
+                return Err(ValidationItem {
+                    level: ValidationLevel::Error,
                     path: path.to_string(),
                     message: "Array schema must contain exactly one element specifier".to_string(),
                 });
@@ -122,28 +136,37 @@ fn validate_recursive(instance: &Value, schema: &Value, path: &str) -> Result<()
 
             if let Value::Array(instance_arr) = instance {
                 for (i, item) in instance_arr.iter().enumerate() {
-                    validate_recursive(item, item_schema, &format!("{}[{}]", path, i))?;
+                    validate_recursive(item, item_schema, &format!("{}[{}]", path, i), report)?;
                 }
                 Ok(())
             } else {
-                Err(ValidationError::TypeMismatch {
+                report.push(ValidationItem {
+                    level: ValidationLevel::Error,
                     path: path.to_string(),
-                    expected: "array".to_string(),
-                    actual: instance.type_name().to_string(),
-                })
+                    message: format!("Expected array, found {}", instance.type_name()),
+                });
+                Ok(())
             }
         }
 
-        _ => Err(ValidationError::InvalidSchema {
+        _ => Err(ValidationItem {
+            level: ValidationLevel::Error,
             path: path.to_string(),
-            message: format!("Unsupported schema value type: {}", schema.type_name()),
+            message: format!(
+                "Unsupported schema value type: {}",
+                effective_type_schema.type_name()
+            ),
         }),
     }
 }
 
-fn validate_type(instance: &Value, type_name: &str, path: &str) -> Result<(), ValidationError> {
+fn validate_type(
+    instance: &Value,
+    type_name: &str,
+    path: &str,
+    report: &mut ValidationReport,
+) -> Result<(), ValidationItem> {
     let actual_type = instance.type_name();
-
     let is_valid = match type_name {
         "any" => true,
         "string" => matches!(instance, Value::String(_)),
@@ -153,20 +176,23 @@ fn validate_type(instance: &Value, type_name: &str, path: &str) -> Result<(), Va
         "null" => matches!(instance, Value::Null),
         "number" => matches!(instance, Value::Integer(_) | Value::Float(_)),
         _ => {
-            return Err(ValidationError::InvalidSchema {
+            return Err(ValidationItem {
+                level: ValidationLevel::Error,
                 path: path.to_string(),
                 message: format!("Unknown type '{}'", type_name),
             });
         }
     };
 
-    if is_valid {
-        Ok(())
-    } else {
-        Err(ValidationError::TypeMismatch {
+    if !is_valid {
+        report.push(ValidationItem {
+            level: ValidationLevel::Error,
             path: path.to_string(),
-            expected: type_name.to_string(),
-            actual: actual_type.to_string(),
-        })
+            message: format!(
+                "Type mismatch: expected {}, found {}",
+                type_name, actual_type
+            ),
+        });
     }
+    Ok(())
 }
