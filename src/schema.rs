@@ -1,6 +1,8 @@
 use crate::value::Value;
 use std::fmt;
 
+pub mod suggest;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidationLevel {
     Error,
@@ -99,9 +101,7 @@ fn validate_recursive(
                         let mut msg = format!("Unknown field '{}'", key);
 
                         // Typo Suggestion
-                        if let Some(best_match) =
-                            crate::suggest::find_best_match(key, &schema_keys, 2)
-                        {
+                        if let Some(best_match) = suggest::find_best_match(key, &schema_keys, 2) {
                             msg.push_str(&format!("; did you mean '{}'?", best_match));
                         }
 
