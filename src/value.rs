@@ -60,3 +60,18 @@ impl fmt::Display for Value {
         }
     }
 }
+
+impl Value {
+    /// Get the string representation of the value's type
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Value::Null => "null",
+            Value::Bool(_) => "boolean",
+            Value::Integer(_) => "integer",
+            Value::Float(_) => "float",
+            Value::String(_) => "string",
+            Value::Array(_) => "array",
+            Value::Object(_) => "object",
+        }
+    }
+}

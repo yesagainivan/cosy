@@ -43,6 +43,7 @@
 //! ```
 
 pub mod error;
+pub mod schema;
 pub mod serde;
 pub mod syntax;
 pub mod value;

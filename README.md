@@ -432,6 +432,7 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
+- **1.3.0** - Added Schema Validation (`cosy::schema::validate`).
 - **1.2.0** - Added Environment Variable Interpolation (`${VAR}`) with type inference.
 - **1.1.0** - Architectural overhaul: explicit newline tokenization for robust parsing
 - **1.0.0** - Initial specification with full Serde support and comprehensive error handling
@@ -444,11 +445,10 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 These features would enhance COSY for production config management without changing the core format:
 
-**1. Schema Validation**
-- Validate config files against a declarative schema
-- Catch typos and type mismatches early
-- Example: `cosy::validate(&config, &schema)?`
-- Would support: required fields, type constraints, value ranges, regex patterns for strings
+**1. Schema Validation** (Completed v1.3.0)
+- ✅ Validate config files against a declarative schema
+- ✅ Catch typos and type mismatches early
+- ✅ Example: `cosy::validate(&config, &schema)?`
 
 **2. Environment Variable Interpolation** (Completed v1.2.0)
 - ✅ Reference environment variables in configs
