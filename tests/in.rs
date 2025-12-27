@@ -1,7 +1,7 @@
 // tests/integration_tests.rs
 // Place this file in tests/ directory at the root of your project
 
-use cosy::parser::from_str;
+use cosy::from_str;
 use cosy::{CosynError, Value};
 use indexmap::IndexMap;
 

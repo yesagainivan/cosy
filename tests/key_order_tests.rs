@@ -1,7 +1,7 @@
 // tests/key_order_tests.rs
 // Tests verifying that object key order is preserved with IndexMap
 
-use cosy::{Value, from_str, serde_support, to_string};
+use cosy::{Value, from_str, serde as serde_support, to_string};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 

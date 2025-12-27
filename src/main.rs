@@ -1,4 +1,4 @@
-use cosy::serde_support;
+use cosy::serde as cosy_serde;
 use serde::{Deserialize, Serialize};
 
 /// Define your configuration structure with Serde derives
@@ -51,7 +51,7 @@ fn main() {
 
     println!("=== SERDE DESERIALIZATION ===\n");
 
-    match serde_support::from_str::<AppConfig>(cosy_text) {
+    match cosy_serde::from_str::<AppConfig>(cosy_text) {
         Ok(config) => {
             println!("✓ Successfully deserialized into AppConfig struct!\n");
             println!("Config: {:#?}\n", config);
@@ -64,13 +64,13 @@ fn main() {
             println!("Features: {:?}\n", config.features);
 
             println!("=== SERDE SERIALIZATION ===\n");
-            match serde_support::to_string(&config) {
+            match cosy_serde::to_string(&config) {
                 Ok(serialized) => {
                     println!("✓ Successfully serialized back to COSY:\n");
                     println!("{}\n", serialized);
 
                     println!("=== ROUNDTRIP TEST ===\n");
-                    match serde_support::from_str::<AppConfig>(&serialized) {
+                    match cosy_serde::from_str::<AppConfig>(&serialized) {
                         Ok(reparsed) => {
                             if reparsed == config {
                                 println!(

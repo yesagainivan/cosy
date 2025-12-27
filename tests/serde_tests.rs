@@ -1,7 +1,7 @@
 // tests/serde_tests.rs
 // Comprehensive tests for Serde integration, edge cases, and roundtrip behavior
 
-use cosy::serde_support;
+use cosy::serde as serde_support;
 use serde::{Deserialize, Serialize};
 
 // ============================================================================

@@ -1,4 +1,5 @@
 // src/serde_support.rs
+pub mod serializer;
 
 use crate::{CosynError, Value};
 use indexmap::IndexMap;

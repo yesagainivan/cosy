@@ -1,4 +1,4 @@
-use crate::lexer::{Lexer, Position, Token, TokenWithPos};
+use crate::syntax::lexer::{Lexer, Position, Token, TokenWithPos};
 use crate::{CosynError, Value};
 use indexmap::IndexMap;
 use std::error::Error;
