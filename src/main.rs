@@ -1,103 +1,58 @@
-use cosy::serde as cosy_serde;
-use serde::{Deserialize, Serialize};
-
-/// Define your configuration structure with Serde derives
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct ServerConfig {
-    host: String,
-    port: u16,
-    ssl: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct DatabaseConfig {
-    url: String,
-    max_connections: u32,
-    timeout: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct AppConfig {
-    version: String,
-    debug: bool,
-    server: ServerConfig,
-    database: DatabaseConfig,
-    features: Vec<String>,
-}
+use std::env;
+use std::fs;
+use std::process;
 
 fn main() {
-    let cosy_text = r#"{
-        version: "1.0.0"
-        debug: true
+    let args: Vec<String> = env::args().collect();
 
-        server: {
-            host: "localhost"
-            port: 8080
-            ssl: false
-        }
+    if args.len() < 2 {
+        print_usage();
+        process::exit(1);
+    }
 
-        database: {
-            url: "postgresql://localhost/mydb"
-            max_connections: 100
-            timeout: 30
-        }
-
-        features: [
-            "auth"
-            "logging"
-            "caching"
-        ]
-    }"#;
-
-    println!("=== SERDE DESERIALIZATION ===\n");
-
-    match cosy_serde::from_str::<AppConfig>(cosy_text) {
-        Ok(config) => {
-            println!("✓ Successfully deserialized into AppConfig struct!\n");
-            println!("Config: {:#?}\n", config);
-
-            println!("=== TYPE-SAFE ACCESS ===\n");
-            println!("Version: {}", config.version);
-            println!("Debug mode: {}", config.debug);
-            println!("Server: {}:{}", config.server.host, config.server.port);
-            println!("Database: {}", config.database.url);
-            println!("Features: {:?}\n", config.features);
-
-            println!("=== SERDE SERIALIZATION ===\n");
-            match cosy_serde::to_string(&config) {
-                Ok(serialized) => {
-                    println!("✓ Successfully serialized back to COSY:\n");
-                    println!("{}\n", serialized);
-
-                    println!("=== ROUNDTRIP TEST ===\n");
-                    match cosy_serde::from_str::<AppConfig>(&serialized) {
-                        Ok(reparsed) => {
-                            if reparsed == config {
-                                println!(
-                                    "✓ Perfect roundtrip! Struct → COSY → Struct preserves all data"
-                                );
-                            } else {
-                                println!("✗ Roundtrip failed: configs differ");
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("✗ Failed to reparse: {}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("✗ Serialization failed: {}", e);
-                }
+    match args[1].as_str() {
+        "check" => {
+            if args.len() < 3 {
+                eprintln!("Error: Missing file path for 'check' command.");
+                print_usage();
+                process::exit(1);
             }
+            check_file(&args[2]);
         }
+        "help" | "--help" | "-h" => {
+            print_usage();
+        }
+        cmd => {
+            eprintln!("Error: Unknown command '{}'", cmd);
+            print_usage();
+            process::exit(1);
+        }
+    }
+}
+
+fn print_usage() {
+    println!("COSY - Comfortable Object Syntax, Yay!");
+    println!("\nUsage:");
+    println!("  cosy check <file>   Parse and validate a file syntax");
+    println!("  cosy help           Show this help message");
+}
+
+fn check_file(path: &str) {
+    println!("Checking '{}'...", path);
+
+    match fs::read_to_string(path) {
+        Ok(content) => match cosy::from_str(&content) {
+            Ok(_) => {
+                println!("✅ Syntax OK");
+            }
+            Err(e) => {
+                eprintln!("❌ Parse Error: {}", e);
+                process::exit(1);
+            }
+        },
         Err(e) => {
-            eprintln!(
-                "✗ Deserialization failed at line {}, column {}: {}",
-                e.line(),
-                e.column(),
-                e.message()
-            );
-            std::process::exit(1);
+            eprintln!("❌ IO Error: Failed to read file '{}': {}", path, e);
+            process::exit(1);
         }
     }
 }

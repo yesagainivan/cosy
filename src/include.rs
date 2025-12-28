@@ -94,25 +94,9 @@ fn resolve_recursive(
                 // 4. Merge
                 // The included value MUST be an object to merge into our current object
                 if let ValueKind::Object(included_map) = included_value.kind {
-                    // We merge CURRENT fields INTO included map.
-                    // Local fields override included fields.
-                    // We merge included map INTO current map.
-                    // But wait: we want Local fields to override Included fields.
-                    // The `merge(base, override)` function merges override INTO base.
-                    //
-                    // Current state:
-                    // `map`: contains local fields (minus "include" key)
-                    // `included_map`: contains fields from included file
-                    //
-                    // We want: Local Config > Included Config
-                    // So we should treat `included_map` as BASE and `map` (local) as OVERRIDE.
-
-                    // 1. Let's swap the content so included_map becomes the base for our final result
-                    // We can move all items from map into included_map using merge,
-                    // treating `included_map` as BASE and `map` as OVERRIDE.
-                    // 1. Let's swap the content so included_map becomes the base for our final result
-                    // We can move all items from map into included_map using merge,
-                    // treating `included_map` as BASE and `map` as OVERRIDE.
+                    // Merge strategy: Local Config > Included Config.
+                    // We treat `included_map` as the BASE and `map` (containing local fields) as the OVERRIDE.
+                    // This ensures that local settings take precedence over included defaults.
                     let local_overrides = Value::from(ValueKind::Object(std::mem::take(map)));
                     let mut base_included = Value::from(ValueKind::Object(included_map));
 

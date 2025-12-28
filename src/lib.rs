@@ -2,45 +2,37 @@
 //!
 //! A human-friendly configuration format built in Rust with full Serde support.
 //!
-//! ## Features
+//! ## Key Features
 //!
-//! - **Comments**: `// This is a comment`
-//! - **Unquoted keys**: `name: "Alice"` (no quotes needed around `name`)
-//! - **Trailing commas**: `[1, 2, 3,]` (allowed everywhere)
-//! - **Newlines as separators**: Objects and arrays can use newlines instead of commas
-//! - **Type distinction**: Separate integers from floats, proper null support
-//! - **Detailed error messages**: Accurate line/column information
-//! - **Full Serde support**: Automatic serialization/deserialization to Rust structs
-//! - **Preserved key order**: Object keys maintain insertion order
+//! - **Human-Centric**: Comments (`//`), unquoted keys, and optional commas.
+//! - **Robust**: Type distinction (integers vs floats), exact error reporting.
+//! - **Composable**: Config inclusion (`include: "base.cosy"`) and merging.
+//! - **Safe**: Schema validation and strict mode for typo detection.
+//! - **Serde Integration**: Seamlessly map config files to Rust structs.
 //!
-//! ## Example with Serde
+//! ## Example
 //!
 //! ```no_run
-//! use serde::{Deserialize, Serialize};
-//! use cosy;
+//! use serde::Deserialize;
+//! use cosy::serde::from_str;
 //!
-//! #[derive(Serialize, Deserialize)]
+//! #[derive(Deserialize)]
 //! struct Config {
-//!     name: String,
-//!     age: u32,
-//!     scores: Vec<i32>,
+//!     server_name: String,
+//!     port: u16,
+//!     debug: bool,
 //! }
 //!
-//! let cosy_text = r#"{
-//!     name: "Alice"
-//!     age: 30
-//!     scores: [95, 87, 92]
+//! let config_str = r#"{
+//!     server_name: "MyServer"
+//!     port: 8080
+//!     debug: true  // dev mode
 //! }"#;
 //!
-//! // Direct deserialization into your struct!
-//! let config: Config = cosy::serde::from_str(cosy_text).unwrap();
-//! assert_eq!(config.name, "Alice");
-//! assert_eq!(config.age, 30);
-//!
-//! // And serialize back
-//! let serialized = cosy::serde::to_string(&config).unwrap();
-//! println!("{}", serialized);
+//! let config: Config = from_str(config_str).unwrap();
 //! ```
+
+// --- Modules ---
 
 pub mod error;
 pub mod include;
@@ -51,11 +43,20 @@ pub mod serde;
 pub mod syntax;
 pub mod value;
 
+// --- Prelude / Re-exports ---
+
+// Primary types
 pub use error::CosynError;
-pub use syntax::parser::{ParseError, from_str};
 pub use value::Value;
 
-// Re-export Serde support for backward compatibility if desired, or point to new paths
-// The previous serializer exports:
+// Parsing
+pub use syntax::parser::{ParseError, from_str};
+
+// Convenience utilities
 pub use load::load_and_merge;
 pub use serde::serializer::{SerializeOptions, to_string, to_string_with_options};
+
+// Feature re-exports
+pub use include::resolve as resolve_includes;
+pub use merge::merge;
+pub use schema::validate;
