@@ -17,7 +17,14 @@ where
     T: Deserialize<'a>,
 {
     let value = crate::from_str(input)?;
-    // Create a deserializer from the Value and use it to deserialize T
+    from_value(value)
+}
+
+/// Deserialize any type that implements `Deserialize` from a COSY `Value`
+pub fn from_value<'a, T>(value: Value) -> Result<T, CosynError>
+where
+    T: Deserialize<'a>,
+{
     T::deserialize(ValueDeserializer::new(value)).map_err(|e| {
         CosynError::Parse(crate::ParseError {
             message: e.to_string(),

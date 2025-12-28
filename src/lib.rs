@@ -14,7 +14,7 @@
 //!
 //! ```no_run
 //! use serde::Deserialize;
-//! use cosy::serde::from_str;
+//! use cosy::serde::{from_str, from_value};
 //!
 //! #[derive(Deserialize)]
 //! struct Config {
@@ -60,3 +60,4 @@ pub use serde::serializer::{SerializeOptions, to_string, to_string_with_options}
 pub use include::resolve as resolve_includes;
 pub use merge::merge;
 pub use schema::validate;
+pub use serde::from_value;
