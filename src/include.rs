@@ -91,8 +91,6 @@ fn resolve_recursive(
 
                 // 4. Merge
                 // The included value MUST be an object to merge into our current object
-                // 4. Merge
-                // The included value MUST be an object to merge into our current object
                 if let ValueKind::Object(included_map) = included_value.kind {
                     // Merge strategy: Local Config > Included Config.
                     // We treat `included_map` as the BASE and `map` (containing local fields) as the OVERRIDE.
@@ -102,7 +100,6 @@ fn resolve_recursive(
 
                     merge::merge(&mut base_included, local_overrides);
 
-                    // 2. Now put the result back into `map` (which is `value`'s internal map)
                     // 2. Now put the result back into `map` (which is `value`'s internal map)
                     if let ValueKind::Object(merged_map) = base_included.kind {
                         *map = merged_map;
