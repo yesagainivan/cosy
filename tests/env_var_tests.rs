@@ -1,4 +1,5 @@
-use cosy::{Value, from_str};
+use cosy::from_str;
+use cosy::value::{Value, ValueKind};
 use std::env;
 
 #[test]
@@ -14,10 +15,10 @@ fn test_env_var_in_string() {
     let input = format!(r#"{{ key: "Value is ${{{}}}" }}"#, key);
     let value = from_str(&input).unwrap();
 
-    if let Value::Object(obj) = value {
+    if let ValueKind::Object(obj) = value.kind {
         assert_eq!(
             obj.get("key"),
-            Some(&Value::String("Value is interpolated".to_string()))
+            Some(&Value::string("Value is interpolated".to_string()))
         );
     } else {
         panic!("Expected object");
@@ -38,8 +39,8 @@ fn test_env_var_standalone_integer() {
     let input = format!(r#"{{ port: ${{{}}} }}"#, key);
     let value = from_str(&input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("port"), Some(&Value::Integer(42)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("port"), Some(&Value::integer(42)));
     } else {
         panic!("Expected object");
     }
@@ -59,8 +60,8 @@ fn test_env_var_standalone_bool() {
     let input = format!(r#"{{ flag: ${{{}}} }}"#, key);
     let value = from_str(&input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("flag"), Some(&Value::Bool(true)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("flag"), Some(&Value::boolean(true)));
     } else {
         panic!("Expected object");
     }
@@ -80,8 +81,8 @@ fn test_env_var_standalone_float() {
     let input = format!(r#"{{ pi: ${{{}}} }}"#, key);
     let value = from_str(&input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("pi"), Some(&Value::Float(3.14159)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("pi"), Some(&Value::float(3.14159)));
     } else {
         panic!("Expected object");
     }
@@ -101,10 +102,10 @@ fn test_env_var_standalone_string_fallback() {
     let input = format!(r#"{{ val: ${{{}}} }}"#, key);
     let value = from_str(&input).unwrap();
 
-    if let Value::Object(obj) = value {
+    if let ValueKind::Object(obj) = value.kind {
         assert_eq!(
             obj.get("val"),
-            Some(&Value::String("not_a_number".to_string()))
+            Some(&Value::string("not_a_number".to_string()))
         );
     } else {
         panic!("Expected object");
@@ -144,7 +145,7 @@ fn test_env_var_escaping() {
     // So "\$${...}" -> lexer sees '\', consumes it, sees '$', pushes '$'.
     // Next char is '$', then '{'. That matches interpolation start!
     // So it would be: "$<interpolated_value>".
-
+    //
     // To get literal "${VAR}", we need to escape `$` but NOT follow it with `{`?
     // Or rather, if I want literal "${VAR}", I need to escape the `$` that starts the interpolation.
     // My code allows escaping `$`.
@@ -156,8 +157,8 @@ fn test_env_var_escaping() {
     let input = r#"{ val: "\${VAR}" }"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("val"), Some(&Value::String("${VAR}".to_string())));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("val"), Some(&Value::string("${VAR}".to_string())));
     } else {
         panic!("Expected object");
     }

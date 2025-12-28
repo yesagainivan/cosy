@@ -1,7 +1,8 @@
 // tests/key_order_tests.rs
 // Tests verifying that object key order is preserved with IndexMap
 
-use cosy::{Value, from_str, serde as serde_support, to_string};
+use cosy::value::{Value, ValueKind};
+use cosy::{from_str, serde as serde_support, to_string};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +22,7 @@ fn test_parse_preserves_key_order() {
 
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
+    if let ValueKind::Object(obj) = value.kind {
         let keys: Vec<&String> = obj.keys().collect();
         assert_eq!(keys, vec!["first", "second", "third", "fourth", "fifth"]);
     } else {
@@ -32,17 +33,17 @@ fn test_parse_preserves_key_order() {
 #[test]
 fn test_serialize_maintains_key_order() {
     let mut obj = IndexMap::new();
-    obj.insert("alpha".to_string(), Value::Integer(1));
-    obj.insert("bravo".to_string(), Value::Integer(2));
-    obj.insert("charlie".to_string(), Value::Integer(3));
-    obj.insert("delta".to_string(), Value::Integer(4));
+    obj.insert("alpha".to_string(), Value::integer(1));
+    obj.insert("bravo".to_string(), Value::integer(2));
+    obj.insert("charlie".to_string(), Value::integer(3));
+    obj.insert("delta".to_string(), Value::integer(4));
 
-    let value = Value::Object(obj);
+    let value = Value::object(obj);
     let serialized = to_string(&value);
 
     // Parse it back and verify order
     let reparsed = from_str(&serialized).unwrap();
-    if let Value::Object(obj) = reparsed {
+    if let ValueKind::Object(obj) = reparsed.kind {
         let keys: Vec<&String> = obj.keys().collect();
         assert_eq!(keys, vec!["alpha", "bravo", "charlie", "delta"]);
     } else {
@@ -62,7 +63,7 @@ fn test_roundtrip_preserves_order() {
     let serialized = to_string(&parsed);
     let reparsed = from_str(&serialized).unwrap();
 
-    if let Value::Object(obj) = reparsed {
+    if let ValueKind::Object(obj) = reparsed.kind {
         let keys: Vec<&String> = obj.keys().collect();
         // Order should be preserved from original parse, not alphabetical
         assert_eq!(keys, vec!["z_last", "a_first", "m_middle"]);
@@ -99,7 +100,7 @@ fn test_serde_struct_field_order_preserved() {
 
     // Parse the serialized version and check key order
     let reparsed_value: Value = from_str(&serialized).unwrap();
-    if let Value::Object(obj) = reparsed_value {
+    if let ValueKind::Object(obj) = reparsed_value.kind {
         let keys: Vec<&String> = obj.keys().collect();
         // Keys should appear in field declaration order
         assert_eq!(keys, vec!["name", "version", "debug", "port", "timeout"]);
@@ -160,7 +161,7 @@ fn test_serde_nested_config_key_order() {
 
     // Verify top-level key order
     let reparsed_value: Value = from_str(&serialized).unwrap();
-    if let Value::Object(obj) = reparsed_value {
+    if let ValueKind::Object(obj) = reparsed_value.kind {
         let keys: Vec<&String> = obj.keys().collect();
         assert_eq!(keys, vec!["app_name", "server", "database", "debug"]);
     }
@@ -181,7 +182,7 @@ fn test_insertion_order_not_alphabetical() {
 
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
+    if let ValueKind::Object(obj) = value.kind {
         let keys: Vec<&String> = obj.keys().collect();
         // Order should match insertion order, not alphabetical
         assert_eq!(keys, vec!["zebra", "apple", "monkey", "banana"]);
@@ -210,7 +211,7 @@ fn test_large_object_key_order() {
 
     let value = from_str(&input).unwrap();
 
-    if let Value::Object(obj) = value {
+    if let ValueKind::Object(obj) = value.kind {
         let parsed_keys: Vec<&String> = obj.keys().collect();
         let expected_keys: Vec<&str> = keys_in_order.iter().copied().collect();
         assert_eq!(parsed_keys, expected_keys);
@@ -233,8 +234,8 @@ fn test_duplicate_keys_last_wins() {
 
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("name"), Some(&Value::String("Third".to_string())));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("name"), Some(&Value::string("Third".to_string())));
         // Only one "name" key should exist
         assert_eq!(obj.len(), 1);
     } else {
@@ -280,7 +281,7 @@ fn test_realistic_config_key_order() {
     let value = from_str(config_text).unwrap();
 
     // Check top-level order
-    if let Value::Object(root) = value {
+    if let ValueKind::Object(root) = value.kind {
         let keys: Vec<&String> = root.keys().collect();
         assert_eq!(
             keys,
@@ -296,18 +297,26 @@ fn test_realistic_config_key_order() {
         );
 
         // Check nested object order
-        if let Some(Value::Object(server)) = root.get("server") {
-            let server_keys: Vec<&String> = server.keys().collect();
-            assert_eq!(server_keys, vec!["host", "port", "ssl"]);
+        if let Some(server_val) = root.get("server") {
+            if let ValueKind::Object(server) = &server_val.kind {
+                let server_keys: Vec<&String> = server.keys().collect();
+                assert_eq!(server_keys, vec!["host", "port", "ssl"]);
+            } else {
+                panic!("Expected server object");
+            }
         } else {
-            panic!("Expected server object");
+            panic!("Expected server field");
         }
 
-        if let Some(Value::Object(database)) = root.get("database") {
-            let db_keys: Vec<&String> = database.keys().collect();
-            assert_eq!(db_keys, vec!["url", "pool_size", "timeout"]);
+        if let Some(database_val) = root.get("database") {
+            if let ValueKind::Object(database) = &database_val.kind {
+                let db_keys: Vec<&String> = database.keys().collect();
+                assert_eq!(db_keys, vec!["url", "pool_size", "timeout"]);
+            } else {
+                panic!("Expected database object");
+            }
         } else {
-            panic!("Expected database object");
+            panic!("Expected database field");
         }
     } else {
         panic!("Expected object");
@@ -343,11 +352,15 @@ fn test_key_order_survives_roundtrip() {
     assert_eq!(value2, value3);
 
     // Key order should be consistent across all roundtrips
-    if let Value::Object(obj1) = value1 {
-        if let Value::Object(obj3) = value3 {
+    if let ValueKind::Object(obj1) = value1.kind {
+        if let ValueKind::Object(obj3) = value3.kind {
             let keys1: Vec<&String> = obj1.keys().collect();
             let keys3: Vec<&String> = obj3.keys().collect();
             assert_eq!(keys1, keys3);
+        } else {
+            panic!("value3 not object");
         }
+    } else {
+        panic!("value1 not object");
     }
 }

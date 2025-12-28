@@ -1,4 +1,4 @@
-use crate::Value;
+use crate::value::{Value, ValueKind};
 use indexmap::IndexMap;
 
 /// Serialization options for controlling output format
@@ -51,18 +51,33 @@ impl Serializer {
     }
 
     fn serialize_value(&mut self, value: &Value) -> String {
-        match value {
-            Value::Null => "null".to_string(),
-            Value::Bool(b) => b.to_string(),
-            Value::Integer(i) => i.to_string(),
-            Value::Float(f) => {
+        let mut result = String::new();
+        // Append comments first
+        for comment in &value.comments {
+            result.push_str(&self.indent());
+            result.push_str("// ");
+            result.push_str(comment);
+            result.push('\n');
+        }
+
+        // Append value
+        result.push_str(&self.serialize_value_kind(&value.kind));
+        result
+    }
+
+    fn serialize_value_kind(&mut self, kind: &ValueKind) -> String {
+        match kind {
+            ValueKind::Null => "null".to_string(),
+            ValueKind::Bool(b) => b.to_string(),
+            ValueKind::Integer(i) => i.to_string(),
+            ValueKind::Float(f) => {
                 // Format floats nicely, avoiding unnecessary decimals
                 let s = f.to_string();
                 if s.ends_with(".0") { s } else { s }
             }
-            Value::String(s) => self.serialize_string(s),
-            Value::Array(arr) => self.serialize_array(arr),
-            Value::Object(obj) => self.serialize_object(obj),
+            ValueKind::String(s) => self.serialize_string(s),
+            ValueKind::Array(arr) => self.serialize_array(arr),
+            ValueKind::Object(obj) => self.serialize_object(obj),
         }
     }
 
@@ -202,43 +217,46 @@ mod tests {
 
     #[test]
     fn test_serialize_null() {
-        assert_eq!(to_string(&Value::Null), "null");
+        assert_eq!(to_string(&Value::from(ValueKind::Null)), "null");
     }
 
     #[test]
     fn test_serialize_booleans() {
-        assert_eq!(to_string(&Value::Bool(true)), "true");
-        assert_eq!(to_string(&Value::Bool(false)), "false");
+        assert_eq!(to_string(&Value::from(ValueKind::Bool(true))), "true");
+        assert_eq!(to_string(&Value::from(ValueKind::Bool(false))), "false");
     }
 
     #[test]
     fn test_serialize_numbers() {
-        assert_eq!(to_string(&Value::Integer(42)), "42");
-        assert_eq!(to_string(&Value::Integer(-10)), "-10");
-        assert_eq!(to_string(&Value::Float(3.14)), "3.14");
+        assert_eq!(to_string(&Value::from(ValueKind::Integer(42))), "42");
+        assert_eq!(to_string(&Value::from(ValueKind::Integer(-10))), "-10");
+        assert_eq!(to_string(&Value::from(ValueKind::Float(3.14))), "3.14");
     }
 
     #[test]
     fn test_serialize_strings() {
-        assert_eq!(to_string(&Value::String("hello".to_string())), r#""hello""#);
         assert_eq!(
-            to_string(&Value::String("hello\nworld".to_string())),
+            to_string(&Value::from(ValueKind::String("hello".to_string()))),
+            r#""hello""#
+        );
+        assert_eq!(
+            to_string(&Value::from(ValueKind::String("hello\nworld".to_string()))),
             r#""hello\nworld""#
         );
     }
 
     #[test]
     fn test_serialize_empty_array() {
-        assert_eq!(to_string(&Value::Array(vec![])), "[]");
+        assert_eq!(to_string(&Value::from(ValueKind::Array(vec![]))), "[]");
     }
 
     #[test]
     fn test_serialize_simple_array() {
-        let arr = Value::Array(vec![
-            Value::Integer(1),
-            Value::Integer(2),
-            Value::Integer(3),
-        ]);
+        let arr = Value::from(ValueKind::Array(vec![
+            Value::from(ValueKind::Integer(1)),
+            Value::from(ValueKind::Integer(2)),
+            Value::from(ValueKind::Integer(3)),
+        ]));
         let output = to_string(&arr);
         // Should use newlines by default
         assert!(output.contains("\n"));
@@ -249,11 +267,11 @@ mod tests {
 
     #[test]
     fn test_serialize_array_compact() {
-        let arr = Value::Array(vec![
-            Value::Integer(1),
-            Value::Integer(2),
-            Value::Integer(3),
-        ]);
+        let arr = Value::from(ValueKind::Array(vec![
+            Value::from(ValueKind::Integer(1)),
+            Value::from(ValueKind::Integer(2)),
+            Value::from(ValueKind::Integer(3)),
+        ]));
         let options = SerializeOptions {
             use_newlines: false,
             ..Default::default()
@@ -264,16 +282,19 @@ mod tests {
 
     #[test]
     fn test_serialize_empty_object() {
-        let obj = Value::Object(IndexMap::new());
+        let obj = Value::from(ValueKind::Object(IndexMap::new()));
         assert_eq!(to_string(&obj), "{}");
     }
 
     #[test]
     fn test_serialize_simple_object() {
         let mut obj = IndexMap::new();
-        obj.insert("name".to_string(), Value::String("Alice".to_string()));
-        obj.insert("age".to_string(), Value::Integer(30));
-        let value = Value::Object(obj);
+        obj.insert(
+            "name".to_string(),
+            Value::from(ValueKind::String("Alice".to_string())),
+        );
+        obj.insert("age".to_string(), Value::from(ValueKind::Integer(30)));
+        let value = Value::from(ValueKind::Object(obj));
 
         let output = to_string(&value);
         assert!(output.contains("name"));
@@ -285,10 +306,10 @@ mod tests {
     #[test]
     fn test_serialize_object_key_order() {
         let mut obj = IndexMap::new();
-        obj.insert("first".to_string(), Value::Integer(1));
-        obj.insert("second".to_string(), Value::Integer(2));
-        obj.insert("third".to_string(), Value::Integer(3));
-        let value = Value::Object(obj);
+        obj.insert("first".to_string(), Value::from(ValueKind::Integer(1)));
+        obj.insert("second".to_string(), Value::from(ValueKind::Integer(2)));
+        obj.insert("third".to_string(), Value::from(ValueKind::Integer(3)));
+        let value = Value::from(ValueKind::Object(obj));
 
         let output = to_string(&value);
         // Keys should appear in insertion order
@@ -303,12 +324,12 @@ mod tests {
     #[test]
     fn test_serialize_nested_structure() {
         let mut inner = IndexMap::new();
-        inner.insert("x".to_string(), Value::Integer(1));
-        inner.insert("y".to_string(), Value::Integer(2));
+        inner.insert("x".to_string(), Value::from(ValueKind::Integer(1)));
+        inner.insert("y".to_string(), Value::from(ValueKind::Integer(2)));
 
         let mut outer = IndexMap::new();
-        outer.insert("point".to_string(), Value::Object(inner));
-        let value = Value::Object(outer);
+        outer.insert("point".to_string(), Value::from(ValueKind::Object(inner)));
+        let value = Value::from(ValueKind::Object(outer));
 
         let output = to_string(&value);
         assert!(output.contains("point"));
@@ -318,7 +339,10 @@ mod tests {
 
     #[test]
     fn test_serialize_with_trailing_commas() {
-        let arr = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+        let arr = Value::from(ValueKind::Array(vec![
+            Value::from(ValueKind::Integer(1)),
+            Value::from(ValueKind::Integer(2)),
+        ]));
         let options = SerializeOptions {
             trailing_commas: true,
             ..Default::default()

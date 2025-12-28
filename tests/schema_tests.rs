@@ -1,4 +1,4 @@
-use cosy::schema::{ValidationItem, ValidationLevel};
+use cosy::schema::ValidationLevel;
 use cosy::{Value, from_str, schema};
 
 #[test]

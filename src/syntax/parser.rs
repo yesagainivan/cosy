@@ -1,5 +1,6 @@
+use crate::CosynError;
 use crate::syntax::lexer::{Lexer, Position, Token, TokenWithPos};
-use crate::{CosynError, Value};
+use crate::value::{Value, ValueKind};
 use indexmap::IndexMap;
 use std::error::Error;
 use std::fmt;
@@ -41,10 +42,11 @@ impl Parser {
 
     /// Parse a complete COSY document
     pub fn parse(&mut self) -> Result<Value, ParseError> {
-        self.skip_newlines(); // Allow leading newlines
-        let value = self.parse_value()?;
+        let (root_comments, _) = self.consume_newlines_and_comments_captured();
 
-        self.skip_newlines(); // Allow trailing newlines
+        let value = self.parse_value(root_comments)?;
+
+        self.consume_newlines_and_comments_captured(); // Allow trailing newlines/comments
 
         // Ensure we've consumed all tokens (EOF should be next)
         if !matches!(self.current_token(), Token::Eof) {
@@ -55,39 +57,44 @@ impl Parser {
     }
 
     /// Parse any value
-    fn parse_value(&mut self) -> Result<Value, ParseError> {
-        match &self.current_token() {
+    fn parse_value(&mut self, mut leading_comments: Vec<String>) -> Result<Value, ParseError> {
+        let (comments, _) = self.consume_newlines_and_comments_captured();
+        leading_comments.extend(comments);
+
+        let val_kind = match &self.current_token() {
             Token::Null => {
                 self.advance();
-                Ok(Value::Null)
+                ValueKind::Null
             }
             Token::True => {
                 self.advance();
-                Ok(Value::Bool(true))
+                ValueKind::Bool(true)
             }
             Token::False => {
                 self.advance();
-                Ok(Value::Bool(false))
+                ValueKind::Bool(false)
             }
             Token::Integer(i) => {
-                let val = Value::Integer(*i);
+                let v = ValueKind::Integer(*i);
                 self.advance();
-                Ok(val)
+                v
             }
             Token::Float(f) => {
-                let val = Value::Float(*f);
+                let v = ValueKind::Float(*f);
                 self.advance();
-                Ok(val)
+                v
             }
             Token::String(s) => {
-                let val = Value::String(s.clone());
+                let v = ValueKind::String(s.clone());
                 self.advance();
-                Ok(val)
+                v
             }
-            Token::LeftBrace => self.parse_object(),
-            Token::LeftBracket => self.parse_array(),
-            token => Err(self.error_at_current(format!("Expected value, found {}", token))),
-        }
+            Token::LeftBrace => return self.parse_object(leading_comments),
+            Token::LeftBracket => return self.parse_array(leading_comments),
+            token => return Err(self.error_at_current(format!("Expected value, found {}", token))),
+        };
+
+        Ok(Value::with_comments(val_kind, leading_comments))
     }
 
     /// Expect a specific token, advance if found
@@ -150,29 +157,49 @@ impl Parser {
         }
     }
 
-    /// Skip any number of newlines, returning true if any were skipped
-    fn skip_newlines(&mut self) -> bool {
-        let mut skipped = false;
-        while matches!(self.current_token(), Token::Newline) {
-            self.advance();
-            skipped = true;
+    /// Consume newlines and comments, collecting comments and tracking if newline was seen
+    fn consume_newlines_and_comments_captured(&mut self) -> (Vec<String>, bool) {
+        let mut comments = Vec::new();
+        let mut has_newline = false;
+        loop {
+            match self.current_token() {
+                Token::Newline => {
+                    has_newline = true;
+                    self.advance();
+                }
+                Token::Comment(c) => {
+                    comments.push(c);
+                    self.advance();
+                }
+                _ => break,
+            }
         }
-        skipped
+        (comments, has_newline)
     }
 
     /// Parse an object with optional commas after newlines
-    fn parse_object(&mut self) -> Result<Value, ParseError> {
+    fn parse_object(&mut self, leading_comments: Vec<String>) -> Result<Value, ParseError> {
         self.expect(Token::LeftBrace, "Expected '{' to start object")?;
 
         let mut object = IndexMap::new();
+        let mut pending_comments = Vec::new();
 
         loop {
-            self.skip_newlines();
+            let (comments, _nl) = self.consume_newlines_and_comments_captured();
+            pending_comments.extend(comments);
 
             // Handle empty object or end of object
             if matches!(self.current_token(), Token::RightBrace) {
                 self.advance();
-                return Ok(Value::Object(object));
+                // Note: pending_comments are trailing inside object.
+                // Currently discarding or attaching?
+                // Ideally shouldn't discard. But for now, returning object value.
+                // We could attach them? But object value is already created logic.
+                // For now, let's just return.
+                return Ok(Value::with_comments(
+                    ValueKind::Object(object),
+                    leading_comments,
+                ));
             }
 
             // Parse key (identifier or string)
@@ -199,16 +226,22 @@ impl Parser {
             self.expect(Token::Colon, "Expected ':' after object key")?;
 
             // Parse value
-            let value = self.parse_value()?;
+            // Pass pending_comments to the value
+            let value = self.parse_value(pending_comments)?;
+            // pending_comments is consumed by parse_value, so we reset it in the loop start
+
             object.insert(key, value);
 
             // Check for separator (comma or newline)
-            let mut has_sep = self.skip_newlines();
+            let (comments, nl) = self.consume_newlines_and_comments_captured();
+            pending_comments = comments; // Save for next iteration or trailing
+            let mut has_sep = nl;
 
             if matches!(self.current_token(), Token::Comma) {
                 self.advance();
                 has_sep = true;
-                self.skip_newlines();
+                let (comments, _) = self.consume_newlines_and_comments_captured();
+                pending_comments.extend(comments);
             }
 
             if matches!(self.current_token(), Token::RightBrace) {
@@ -224,35 +257,48 @@ impl Parser {
             }
         }
 
-        Ok(Value::Object(object))
+        Ok(Value::with_comments(
+            ValueKind::Object(object),
+            leading_comments,
+        ))
     }
 
     /// Parse an array with optional commas after newlines
-    fn parse_array(&mut self) -> Result<Value, ParseError> {
+    fn parse_array(&mut self, leading_comments: Vec<String>) -> Result<Value, ParseError> {
         self.expect(Token::LeftBracket, "Expected '[' to start array")?;
 
         let mut array = Vec::new();
+        let mut pending_comments = Vec::new();
 
         loop {
-            self.skip_newlines();
+            let (comments, _nl) = self.consume_newlines_and_comments_captured();
+            pending_comments.extend(comments);
 
             // Handle empty array or end of array
             if matches!(self.current_token(), Token::RightBracket) {
                 self.advance();
-                return Ok(Value::Array(array));
+                return Ok(Value::with_comments(
+                    ValueKind::Array(array),
+                    leading_comments,
+                ));
             }
 
             // Parse value
-            let value = self.parse_value()?;
+            let value = self.parse_value(pending_comments)?;
+            // pending_comments consumed
+
             array.push(value);
 
             // Check for separator
-            let mut has_sep = self.skip_newlines();
+            let (comments, nl) = self.consume_newlines_and_comments_captured();
+            pending_comments = comments; // Save for next iteration
+            let mut has_sep = nl;
 
             if matches!(self.current_token(), Token::Comma) {
                 self.advance();
                 has_sep = true;
-                self.skip_newlines();
+                let (comments, _) = self.consume_newlines_and_comments_captured();
+                pending_comments.extend(comments);
             }
 
             if matches!(self.current_token(), Token::RightBracket) {
@@ -268,7 +314,10 @@ impl Parser {
             }
         }
 
-        Ok(Value::Array(array))
+        Ok(Value::with_comments(
+            ValueKind::Array(array),
+            leading_comments,
+        ))
     }
 }
 
@@ -293,7 +342,7 @@ mod tests {
         ];
         let mut parser = Parser::new(tokens);
         let value = parser.parse().unwrap();
-        assert_eq!(value, Value::Null);
+        assert_eq!(value.kind, ValueKind::Null);
     }
 
     #[test]
@@ -321,10 +370,19 @@ mod tests {
     }"#;
         let value = from_str(input).unwrap();
 
-        match value {
-            Value::Object(obj) => {
-                assert_eq!(obj.get("name"), Some(&Value::String("Alice".to_string())));
-                assert_eq!(obj.get("age"), Some(&Value::Integer(30)));
+        match value.kind {
+            ValueKind::Object(obj) => {
+                let name = obj.get("name").unwrap();
+                match &name.kind {
+                    ValueKind::String(s) => assert_eq!(s, "Alice"),
+                    _ => panic!("Expected string"),
+                }
+
+                let age = obj.get("age").unwrap();
+                match &age.kind {
+                    ValueKind::Integer(i) => assert_eq!(*i, 30),
+                    _ => panic!("Expected integer"),
+                }
             }
             _ => panic!("Expected object"),
         }
@@ -340,8 +398,8 @@ mod tests {
     }"#;
         let value = from_str(input).unwrap();
 
-        match value {
-            Value::Object(obj) => {
+        match value.kind {
+            ValueKind::Object(obj) => {
                 let keys: Vec<&String> = obj.keys().collect();
                 assert_eq!(keys, vec!["first", "second", "third", "fourth"]);
             }

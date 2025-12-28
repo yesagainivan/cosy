@@ -1,4 +1,5 @@
-use cosy::{Value, from_str, include};
+use cosy::value::{Value, ValueKind};
+use cosy::{from_str, include};
 use std::fs;
 use tempfile::tempdir;
 
@@ -32,9 +33,9 @@ fn test_basic_inclusion() {
     // Resolve includes relative to the temp dir
     include::resolve(&mut config, dir.path()).unwrap();
 
-    if let Value::Object(map) = config {
-        assert_eq!(map.get("port"), Some(&Value::Integer(8000))); // Inherited
-        assert_eq!(map.get("debug"), Some(&Value::Bool(true))); // Overridden
+    if let ValueKind::Object(map) = config.kind {
+        assert_eq!(map.get("port"), Some(&Value::integer(8000))); // Inherited
+        assert_eq!(map.get("debug"), Some(&Value::boolean(true))); // Overridden
         assert!(!map.contains_key("include")); // Removed
     } else {
         panic!("Expected object");
@@ -57,10 +58,10 @@ fn test_nested_inclusion() {
 
     include::resolve(&mut config, dir.path()).unwrap();
 
-    if let Value::Object(map) = config {
-        assert_eq!(map.get("a"), Some(&Value::Integer(1)));
-        assert_eq!(map.get("b"), Some(&Value::Integer(2)));
-        assert_eq!(map.get("c"), Some(&Value::Integer(3)));
+    if let ValueKind::Object(map) = config.kind {
+        assert_eq!(map.get("a"), Some(&Value::integer(1)));
+        assert_eq!(map.get("b"), Some(&Value::integer(2)));
+        assert_eq!(map.get("c"), Some(&Value::integer(3)));
     } else {
         panic!("Expected object");
     }
@@ -84,16 +85,20 @@ fn test_include_in_sub_object() {
     let mut config = from_str(config_str).unwrap();
     include::resolve(&mut config, dir.path()).unwrap();
 
-    if let Value::Object(root) = config {
-        if let Some(Value::Object(db)) = root.get("database") {
-            assert_eq!(
-                db.get("host"),
-                Some(&Value::String("localhost".to_string()))
-            );
-            assert_eq!(db.get("port"), Some(&Value::Integer(5432)));
-            assert_eq!(db.get("user"), Some(&Value::String("admin".to_string())));
+    if let ValueKind::Object(root) = config.kind {
+        if let Some(db_val) = root.get("database") {
+            if let ValueKind::Object(db) = &db_val.kind {
+                assert_eq!(
+                    db.get("host"),
+                    Some(&Value::string("localhost".to_string()))
+                );
+                assert_eq!(db.get("port"), Some(&Value::integer(5432)));
+                assert_eq!(db.get("user"), Some(&Value::string("admin".to_string())));
+            } else {
+                panic!("database should be an object");
+            }
         } else {
-            panic!("database should be an object");
+            panic!("database field missing");
         }
     } else {
         panic!("root should be an object");

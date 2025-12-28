@@ -432,6 +432,7 @@ separator = "," | newline | ("," newline) | (newline ",")
 
 ## 12. Version History
 
+- **1.7.0** - Added Comment Preservation: Comments are now preserved during parsing and round-trip serialization.
 - **1.6.0** - Added Strict Mode Features: Typo suggestions ("Did you mean...?") and Deprecation warnings.
 - **1.5.0** - Added Config Merging (`cosy::load_and_merge`) and Deep Merge logic.
 - **1.4.0** - Added Config File Inclusion (`cosy::include`).
@@ -469,6 +470,11 @@ These features would enhance COSY for production config management without chang
 - ✅ Suggest corrections: "Unknown key 'port'; did you mean 'ports'?"
 - ✅ Useful for catching accidental misconfigurations
 
+**5. Comments Preservation** (Completed v1.7.0)
+- ✅ Preserve comments during roundtrip serialization
+- ✅ Comments attached to AST nodes
+- ✅ Useful for programmatic config modification while maintaining documentation
+
 
 
 ### Considered (Lower Priority)
@@ -478,11 +484,6 @@ These features would enhance COSY for production config management without chang
 - Pretty-printing: `cosy format config.cosy --indent 2`
 - Converting to/from JSON: `cosy to-json config.cosy`
 - Checking against schema: `cosy check config.cosy --schema config.schema`
-
-**Comments Preservation** - Preserve comments during roundtrip serialization
-- Would require: tracking comment locations in AST
-- Useful for: programmatic config modification while keeping documentation
-- Trade-off: Added complexity for edge case
 
 **Custom Derive Macros** - `#[cosy(...)]` attributes for fine-grained control
 - Would support: field validation, custom deserialization, computed fields

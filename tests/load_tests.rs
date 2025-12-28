@@ -1,4 +1,5 @@
-use cosy::{Value, load_and_merge};
+use cosy::load_and_merge;
+use cosy::value::{Value, ValueKind};
 use std::fs;
 use tempfile::tempdir;
 
@@ -14,10 +15,10 @@ fn test_load_and_merge_basic() {
     let paths = [base_path.as_path(), override_path.as_path()];
     let config = load_and_merge(&paths).unwrap();
 
-    if let Value::Object(map) = config {
-        assert_eq!(map.get("a"), Some(&Value::Integer(1)));
-        assert_eq!(map.get("b"), Some(&Value::Integer(3))); // Overridden
-        assert_eq!(map.get("c"), Some(&Value::Integer(4))); // Added
+    if let ValueKind::Object(map) = config.kind {
+        assert_eq!(map.get("a"), Some(&Value::integer(1)));
+        assert_eq!(map.get("b"), Some(&Value::integer(3))); // Overridden
+        assert_eq!(map.get("c"), Some(&Value::integer(4))); // Added
     } else {
         panic!("Expected object");
     }
@@ -35,13 +36,13 @@ fn test_load_and_merge_nested() {
     let paths = [p1.as_path(), p2.as_path()];
     let config = load_and_merge(&paths).unwrap();
 
-    if let Value::Object(root) = config {
+    if let ValueKind::Object(root) = config.kind {
         let server = root.get("server").unwrap().as_object().unwrap();
         assert_eq!(
             server.get("host"),
-            Some(&Value::String("localhost".to_string()))
+            Some(&Value::string("localhost".to_string()))
         );
-        assert_eq!(server.get("port"), Some(&Value::Integer(443)));
+        assert_eq!(server.get("port"), Some(&Value::integer(443)));
     } else {
         panic!("Expected object");
     }
@@ -53,10 +54,9 @@ pub trait ValueExt {
 
 impl ValueExt for Value {
     fn as_object(&self) -> Option<&indexmap::IndexMap<String, Value>> {
-        if let Value::Object(map) = self {
-            Some(map)
-        } else {
-            None
+        match &self.kind {
+            ValueKind::Object(map) => Some(map),
+            _ => None,
         }
     }
 }

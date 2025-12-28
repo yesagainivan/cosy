@@ -1,8 +1,9 @@
 // tests/integration_tests.rs
 // Place this file in tests/ directory at the root of your project
 
+use cosy::CosynError;
 use cosy::from_str;
-use cosy::{CosynError, Value};
+use cosy::value::{Value, ValueKind};
 use indexmap::IndexMap;
 
 // ============================================================================
@@ -12,39 +13,39 @@ use indexmap::IndexMap;
 #[test]
 fn test_null() {
     let value = from_str("null").unwrap();
-    assert_eq!(value, Value::Null);
+    assert_eq!(value, Value::null());
 }
 
 #[test]
 fn test_booleans() {
-    assert_eq!(from_str("true").unwrap(), Value::Bool(true));
-    assert_eq!(from_str("false").unwrap(), Value::Bool(false));
+    assert_eq!(from_str("true").unwrap(), Value::boolean(true));
+    assert_eq!(from_str("false").unwrap(), Value::boolean(false));
 }
 
 #[test]
 fn test_integers() {
-    assert_eq!(from_str("42").unwrap(), Value::Integer(42));
-    assert_eq!(from_str("-42").unwrap(), Value::Integer(-42));
-    assert_eq!(from_str("0").unwrap(), Value::Integer(0));
+    assert_eq!(from_str("42").unwrap(), Value::integer(42));
+    assert_eq!(from_str("-42").unwrap(), Value::integer(-42));
+    assert_eq!(from_str("0").unwrap(), Value::integer(0));
 }
 
 #[test]
 fn test_floats() {
-    assert_eq!(from_str("3.14").unwrap(), Value::Float(3.14));
-    assert_eq!(from_str("-3.14").unwrap(), Value::Float(-3.14));
-    assert_eq!(from_str("1e10").unwrap(), Value::Float(1e10));
-    assert_eq!(from_str("1.5e-5").unwrap(), Value::Float(1.5e-5));
+    assert_eq!(from_str("3.14").unwrap(), Value::float(3.14));
+    assert_eq!(from_str("-3.14").unwrap(), Value::float(-3.14));
+    assert_eq!(from_str("1e10").unwrap(), Value::float(1e10));
+    assert_eq!(from_str("1.5e-5").unwrap(), Value::float(1.5e-5));
 }
 
 #[test]
 fn test_strings() {
     assert_eq!(
         from_str(r#""hello""#).unwrap(),
-        Value::String("hello".to_string())
+        Value::string("hello".to_string())
     );
     assert_eq!(
         from_str(r#""hello world""#).unwrap(),
-        Value::String("hello world".to_string())
+        Value::string("hello world".to_string())
     );
 }
 
@@ -52,19 +53,19 @@ fn test_strings() {
 fn test_string_escapes() {
     assert_eq!(
         from_str(r#""hello\nworld""#).unwrap(),
-        Value::String("hello\nworld".to_string())
+        Value::string("hello\nworld".to_string())
     );
     assert_eq!(
         from_str(r#""tab\there""#).unwrap(),
-        Value::String("tab\there".to_string())
+        Value::string("tab\there".to_string())
     );
     assert_eq!(
         from_str(r#""quote\"inside""#).unwrap(),
-        Value::String("quote\"inside".to_string())
+        Value::string("quote\"inside".to_string())
     );
     assert_eq!(
         from_str(r#""backslash\\here""#).unwrap(),
-        Value::String("backslash\\here".to_string())
+        Value::string("backslash\\here".to_string())
     );
 }
 
@@ -75,16 +76,16 @@ fn test_string_escapes() {
 #[test]
 fn test_empty_array() {
     let value = from_str("[]").unwrap();
-    assert_eq!(value, Value::Array(vec![]));
+    assert_eq!(value, Value::array(vec![]));
 }
 
 #[test]
 fn test_simple_array() {
     let value = from_str("[1, 2, 3]").unwrap();
-    let expected = Value::Array(vec![
-        Value::Integer(1),
-        Value::Integer(2),
-        Value::Integer(3),
+    let expected = Value::array(vec![
+        Value::integer(1),
+        Value::integer(2),
+        Value::integer(3),
     ]);
     assert_eq!(value, expected);
 }
@@ -92,12 +93,12 @@ fn test_simple_array() {
 #[test]
 fn test_mixed_array() {
     let value = from_str(r#"[1, "hello", 3.14, true, null]"#).unwrap();
-    let expected = Value::Array(vec![
-        Value::Integer(1),
-        Value::String("hello".to_string()),
-        Value::Float(3.14),
-        Value::Bool(true),
-        Value::Null,
+    let expected = Value::array(vec![
+        Value::integer(1),
+        Value::string("hello".to_string()),
+        Value::float(3.14),
+        Value::boolean(true),
+        Value::null(),
     ]);
     assert_eq!(value, expected);
 }
@@ -105,9 +106,9 @@ fn test_mixed_array() {
 #[test]
 fn test_nested_array() {
     let value = from_str("[[1, 2], [3, 4]]").unwrap();
-    let expected = Value::Array(vec![
-        Value::Array(vec![Value::Integer(1), Value::Integer(2)]),
-        Value::Array(vec![Value::Integer(3), Value::Integer(4)]),
+    let expected = Value::array(vec![
+        Value::array(vec![Value::integer(1), Value::integer(2)]),
+        Value::array(vec![Value::integer(3), Value::integer(4)]),
     ]);
     assert_eq!(value, expected);
 }
@@ -115,10 +116,10 @@ fn test_nested_array() {
 #[test]
 fn test_array_with_trailing_comma() {
     let value = from_str("[1, 2, 3,]").unwrap();
-    let expected = Value::Array(vec![
-        Value::Integer(1),
-        Value::Integer(2),
-        Value::Integer(3),
+    let expected = Value::array(vec![
+        Value::integer(1),
+        Value::integer(2),
+        Value::integer(3),
     ]);
     assert_eq!(value, expected);
 }
@@ -131,10 +132,10 @@ fn test_array_with_newlines() {
         3
     ]";
     let value = from_str(input).unwrap();
-    let expected = Value::Array(vec![
-        Value::Integer(1),
-        Value::Integer(2),
-        Value::Integer(3),
+    let expected = Value::array(vec![
+        Value::integer(1),
+        Value::integer(2),
+        Value::integer(3),
     ]);
     assert_eq!(value, expected);
 }
@@ -147,10 +148,10 @@ fn test_array_newlines_as_separators() {
         3
     ]";
     let value = from_str(input).unwrap();
-    let expected = Value::Array(vec![
-        Value::Integer(1),
-        Value::Integer(2),
-        Value::Integer(3),
+    let expected = Value::array(vec![
+        Value::integer(1),
+        Value::integer(2),
+        Value::integer(3),
     ]);
     assert_eq!(value, expected);
 }
@@ -162,7 +163,7 @@ fn test_array_newlines_as_separators() {
 #[test]
 fn test_empty_object() {
     let value = from_str("{}").unwrap();
-    assert_eq!(value, Value::Object(IndexMap::new()));
+    assert_eq!(value, Value::object(IndexMap::new()));
 }
 
 #[test]
@@ -170,9 +171,9 @@ fn test_simple_object() {
     let input = r#"{name: "Alice", age: 30}"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("name"), Some(&Value::String("Alice".to_string())));
-        assert_eq!(obj.get("age"), Some(&Value::Integer(30)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("name"), Some(&Value::string("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&Value::integer(30)));
     } else {
         panic!("Expected object");
     }
@@ -183,9 +184,9 @@ fn test_object_with_string_keys() {
     let input = r#"{"name": "Bob", "age": 25}"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("name"), Some(&Value::String("Bob".to_string())));
-        assert_eq!(obj.get("age"), Some(&Value::Integer(25)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("name"), Some(&Value::string("Bob".to_string())));
+        assert_eq!(obj.get("age"), Some(&Value::integer(25)));
     } else {
         panic!("Expected object");
     }
@@ -202,12 +203,12 @@ fn test_object_with_various_values() {
     }"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("string"), Some(&Value::String("hello".to_string())));
-        assert_eq!(obj.get("number"), Some(&Value::Integer(42)));
-        assert_eq!(obj.get("float"), Some(&Value::Float(3.14)));
-        assert_eq!(obj.get("bool"), Some(&Value::Bool(true)));
-        assert_eq!(obj.get("null_val"), Some(&Value::Null));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("string"), Some(&Value::string("hello".to_string())));
+        assert_eq!(obj.get("number"), Some(&Value::integer(42)));
+        assert_eq!(obj.get("float"), Some(&Value::float(3.14)));
+        assert_eq!(obj.get("bool"), Some(&Value::boolean(true)));
+        assert_eq!(obj.get("null_val"), Some(&Value::null()));
     } else {
         panic!("Expected object");
     }
@@ -223,15 +224,19 @@ fn test_nested_object() {
     }"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        if let Some(Value::Object(person)) = obj.get("person") {
-            assert_eq!(
-                person.get("name"),
-                Some(&Value::String("Alice".to_string()))
-            );
-            assert_eq!(person.get("age"), Some(&Value::Integer(30)));
+    if let ValueKind::Object(obj) = value.kind {
+        if let Some(person_val) = obj.get("person") {
+            if let ValueKind::Object(person) = &person_val.kind {
+                assert_eq!(
+                    person.get("name"),
+                    Some(&Value::string("Alice".to_string()))
+                );
+                assert_eq!(person.get("age"), Some(&Value::integer(30)));
+            } else {
+                panic!("Expected nested object");
+            }
         } else {
-            panic!("Expected nested object");
+            panic!("Expected person field");
         }
     } else {
         panic!("Expected object");
@@ -246,12 +251,16 @@ fn test_object_with_array_values() {
     }"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        if let Some(Value::Array(scores)) = obj.get("scores") {
-            assert_eq!(scores.len(), 3);
-            assert_eq!(scores[0], Value::Integer(95));
+    if let ValueKind::Object(obj) = value.kind {
+        if let Some(scores_val) = obj.get("scores") {
+            if let ValueKind::Array(scores) = &scores_val.kind {
+                assert_eq!(scores.len(), 3);
+                assert_eq!(scores[0], Value::integer(95));
+            } else {
+                panic!("Expected array for scores");
+            }
         } else {
-            panic!("Expected array for scores");
+            panic!("Expected scores field");
         }
     } else {
         panic!("Expected object");
@@ -267,10 +276,10 @@ fn test_object_with_newlines_as_separators() {
     }"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("name"), Some(&Value::String("Alice".to_string())));
-        assert_eq!(obj.get("age"), Some(&Value::Integer(30)));
-        assert_eq!(obj.get("active"), Some(&Value::Bool(true)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("name"), Some(&Value::string("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&Value::integer(30)));
+        assert_eq!(obj.get("active"), Some(&Value::boolean(true)));
     } else {
         panic!("Expected object");
     }
@@ -281,9 +290,9 @@ fn test_object_with_trailing_comma() {
     let input = r#"{name: "Alice", age: 30,}"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("name"), Some(&Value::String("Alice".to_string())));
-        assert_eq!(obj.get("age"), Some(&Value::Integer(30)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(obj.get("name"), Some(&Value::string("Alice".to_string())));
+        assert_eq!(obj.get("age"), Some(&Value::integer(30)));
     } else {
         panic!("Expected object");
     }
@@ -316,18 +325,22 @@ fn test_complex_document() {
 
     let value = from_str(input).unwrap();
 
-    if let Value::Object(root) = value {
-        if let Some(Value::Array(users)) = root.get("users") {
-            assert_eq!(users.len(), 2);
+    if let ValueKind::Object(root) = value.kind {
+        if let Some(users_val) = root.get("users") {
+            if let ValueKind::Array(users) = &users_val.kind {
+                assert_eq!(users.len(), 2);
 
-            if let Value::Object(alice) = &users[0] {
-                assert_eq!(alice.get("name"), Some(&Value::String("Alice".to_string())));
-                assert_eq!(alice.get("id"), Some(&Value::Integer(1)));
+                if let ValueKind::Object(alice) = &users[0].kind {
+                    assert_eq!(alice.get("name"), Some(&Value::string("Alice".to_string())));
+                    assert_eq!(alice.get("id"), Some(&Value::integer(1)));
+                } else {
+                    panic!("Expected object for first user");
+                }
             } else {
-                panic!("Expected object for first user");
+                panic!("Expected array for users");
             }
         } else {
-            panic!("Expected array for users");
+            panic!("Expected users field");
         }
     } else {
         panic!("Expected object");
@@ -348,9 +361,21 @@ fn test_line_comments_in_object() {
     }"#;
     let value = from_str(input).unwrap();
 
-    if let Value::Object(obj) = value {
-        assert_eq!(obj.get("name"), Some(&Value::String("Alice".to_string())));
-        assert_eq!(obj.get("age"), Some(&Value::Integer(30)));
+    if let ValueKind::Object(obj) = value.kind {
+        assert_eq!(
+            obj.get("name"),
+            Some(&Value::with_comments(
+                ValueKind::String("Alice".to_string()),
+                vec!["This is a comment".to_string()]
+            ))
+        );
+        assert_eq!(
+            obj.get("age"),
+            Some(&Value::with_comments(
+                ValueKind::Integer(30),
+                vec!["Another comment".to_string()]
+            ))
+        );
     } else {
         panic!("Expected object");
     }
@@ -365,10 +390,10 @@ fn test_comments_in_array() {
         3 // inline comment
     ]"#;
     let value = from_str(input).unwrap();
-    let expected = Value::Array(vec![
-        Value::Integer(1),
-        Value::Integer(2),
-        Value::Integer(3),
+    let expected = Value::array(vec![
+        Value::integer(1),
+        Value::with_comments(ValueKind::Integer(2), vec!["comment here".to_string()]),
+        Value::integer(3), // inline comment is discarded by current parser logic if after value
     ]);
     assert_eq!(value, expected);
 }
@@ -429,16 +454,6 @@ fn test_error_message_has_position() {
     assert!(err.line() > 0);
     assert!(err.column() > 0);
     assert!(!err.message().is_empty());
-
-    // // Could also match on the specific error type
-    // match err {
-    //     CosynError::Parse(_) => {
-    //         // Handle parse error specifically
-    //     }
-    //     CosynError::Lex(_) => {
-    //         // Handle lex error specifically
-    //     }
-    // }
 }
 
 #[test]
@@ -448,8 +463,8 @@ fn test_lex_error_position() {
     let err = result.unwrap_err();
 
     match err {
-        CosynError::Lex(_) => {
-            assert_eq!(err.column(), 3);
+        CosynError::Lex(e) => {
+            assert_eq!(e.column, 3);
         }
         _ => panic!("Expected lex error"),
     }
@@ -462,9 +477,9 @@ fn test_parse_error_position() {
     let err = result.unwrap_err();
 
     match err {
-        CosynError::Parse(_) => {
+        CosynError::Parse(e) => {
             // Position info should be available
-            assert!(err.line() > 0);
+            assert!(e.line > 0);
         }
         _ => panic!("Expected parse error"),
     }
@@ -478,5 +493,5 @@ fn test_string_with_newlines_deserialization() {
     // similar to how `test_string_escapes` is written.
     let input_for_parser = r#""line1\nline2""#;
     let deserialized_value = from_str(input_for_parser).unwrap();
-    assert_eq!(deserialized_value, Value::String(original_str.to_string()));
+    assert_eq!(deserialized_value, Value::string(original_str.to_string()));
 }

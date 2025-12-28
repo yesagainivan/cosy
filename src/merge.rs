@@ -1,4 +1,4 @@
-use crate::value::Value;
+use crate::value::{Value, ValueKind};
 
 /// Deeply merges `override_val` into `base`.
 ///
@@ -7,21 +7,37 @@ use crate::value::Value;
 /// - **Arrays**: `override_val` replaces `base`. No array merging (concatenation) is performed.
 /// - **Primitives**: `override_val` replaces `base`.
 pub fn merge(base: &mut Value, override_val: Value) {
-    match (base, override_val) {
-        (Value::Object(base_map), Value::Object(override_map)) => {
-            for (k, v) in override_map {
-                if let Some(base_v) = base_map.get_mut(&k) {
-                    // Recursive merge for existing keys
-                    merge(base_v, v);
-                } else {
-                    // New key, simply insert
-                    base_map.insert(k, v);
+    let Value {
+        kind: override_kind,
+        comments: override_comments,
+    } = override_val;
+
+    // We can only merge if both are objects.
+    // However, we can't easily check `kind` without borrowing.
+    // But we need to update `*base` if they are NOT both objects.
+
+    let base_is_obj = matches!(base.kind, ValueKind::Object(_));
+    let override_is_obj = matches!(override_kind, ValueKind::Object(_));
+
+    if base_is_obj && override_is_obj {
+        // Both match, we must destructure both and merge.
+        if let ValueKind::Object(base_map) = &mut base.kind {
+            if let ValueKind::Object(override_map) = override_kind {
+                for (k, v) in override_map {
+                    if let Some(base_v) = base_map.get_mut(&k) {
+                        merge(base_v, v);
+                    } else {
+                        base_map.insert(k, v);
+                    }
                 }
             }
         }
-        // For all other cases (Array vs Array, Primitive vs Primitive, Mismatched types),
-        // we simply replace the base value with the override value.
-        (base_val, override_val) => *base_val = override_val,
+    } else {
+        // Just replace
+        *base = Value {
+            kind: override_kind,
+            comments: override_comments,
+        };
     }
 }
 
@@ -32,16 +48,16 @@ mod tests {
 
     #[test]
     fn test_merge_scalars() {
-        let mut base = Value::Integer(1);
-        merge(&mut base, Value::Integer(2));
-        assert_eq!(base, Value::Integer(2));
+        let mut base = Value::from(ValueKind::Integer(1));
+        merge(&mut base, Value::from(ValueKind::Integer(2)));
+        assert_eq!(base, Value::from(ValueKind::Integer(2)));
     }
 
     #[test]
     fn test_merge_different_types() {
-        let mut base = Value::Integer(1);
-        merge(&mut base, Value::String("foo".to_string()));
-        assert_eq!(base, Value::String("foo".to_string()));
+        let mut base = Value::from(ValueKind::Integer(1));
+        merge(&mut base, Value::from(ValueKind::String("foo".to_string())));
+        assert_eq!(base, Value::from(ValueKind::String("foo".to_string())));
     }
 
     #[test]
@@ -59,10 +75,10 @@ mod tests {
         merge(&mut base, override_val);
 
         // Expected: { a: 1, b: 3, c: 4 }
-        if let Value::Object(map) = base {
-            assert_eq!(map.get("a"), Some(&Value::Integer(1)));
-            assert_eq!(map.get("b"), Some(&Value::Integer(3))); // Overridden
-            assert_eq!(map.get("c"), Some(&Value::Integer(4))); // Added
+        if let ValueKind::Object(map) = base.kind {
+            assert_eq!(map.get("a"), Some(&Value::from(ValueKind::Integer(1))));
+            assert_eq!(map.get("b"), Some(&Value::from(ValueKind::Integer(3)))); // Overridden
+            assert_eq!(map.get("c"), Some(&Value::from(ValueKind::Integer(4)))); // Added
         } else {
             panic!("Expected object");
         }
@@ -92,13 +108,20 @@ mod tests {
         merge(&mut base, override_val);
 
         // Expected: { server: { host: "localhost", port: 9000 } }
-        if let Value::Object(root) = base {
-            if let Some(Value::Object(server)) = root.get("server") {
-                assert_eq!(
-                    server.get("host"),
-                    Some(&Value::String("localhost".to_string()))
-                );
-                assert_eq!(server.get("port"), Some(&Value::Integer(9000)));
+        if let ValueKind::Object(root) = base.kind {
+            if let Some(server) = root.get("server") {
+                if let ValueKind::Object(server) = &server.kind {
+                    assert_eq!(
+                        server.get("host"),
+                        Some(&Value::from(ValueKind::String("localhost".to_string())))
+                    );
+                    assert_eq!(
+                        server.get("port"),
+                        Some(&Value::from(ValueKind::Integer(9000)))
+                    );
+                } else {
+                    panic!("server not object");
+                }
             } else {
                 panic!("server not object");
             }

@@ -1,4 +1,5 @@
-use cosy::{Value, from_str, include};
+use cosy::value::{Value, ValueKind};
+use cosy::{from_str, include};
 use std::fs;
 use tempfile::tempdir;
 
@@ -39,23 +40,27 @@ fn test_repro_shallow_merge() {
 
     include::resolve(&mut config, dir.path()).unwrap();
 
-    if let Value::Object(root) = config {
-        if let Some(Value::Object(server)) = root.get("server") {
-            let host = server.get("host");
-            let port = server.get("port");
+    if let ValueKind::Object(root) = config.kind {
+        if let Some(server_val) = root.get("server") {
+            if let ValueKind::Object(server) = &server_val.kind {
+                let host = server.get("host");
+                let port = server.get("port");
 
-            println!("Server config after merge: {:?}", server);
+                println!("Server config after merge: {:?}", server);
 
-            assert_eq!(port, Some(&Value::Integer(9000)));
+                assert_eq!(port, Some(&Value::integer(9000)));
 
-            // Deep Merge: Host MUST be present
-            assert_eq!(
-                host,
-                Some(&Value::String("0.0.0.0".to_string())),
-                "Expected host to be preserved"
-            );
+                // Deep Merge: Host MUST be present
+                assert_eq!(
+                    host,
+                    Some(&Value::string("0.0.0.0".to_string())),
+                    "Expected host to be preserved"
+                );
+            } else {
+                panic!("server should be an object");
+            }
         } else {
-            panic!("server should be an object");
+            panic!("server field missing");
         }
     } else {
         panic!("root should be an object");
@@ -111,34 +116,34 @@ fn test_deep_merge_complex() {
 
     include::resolve(&mut config, dir.path()).unwrap();
 
-    if let Value::Object(root) = config {
+    if let ValueKind::Object(root) = config.kind {
         let db = root.get("database").unwrap().as_object().unwrap();
 
         // Host preserved
         assert_eq!(
             db.get("host"),
-            Some(&Value::String("localhost".to_string()))
+            Some(&Value::string("localhost".to_string()))
         );
         // Port overridden
-        assert_eq!(db.get("port"), Some(&Value::Integer(6000)));
+        assert_eq!(db.get("port"), Some(&Value::integer(6000)));
 
         let options = db.get("options").unwrap().as_object().unwrap();
         // SSL preserved
-        assert_eq!(options.get("ssl"), Some(&Value::Bool(true)));
+        assert_eq!(options.get("ssl"), Some(&Value::boolean(true)));
         // Timeout overridden
-        assert_eq!(options.get("timeout"), Some(&Value::Integer(60)));
+        assert_eq!(options.get("timeout"), Some(&Value::integer(60)));
 
         let logging = root.get("logging").unwrap().as_object().unwrap();
         // Level preserved (from base)
         assert_eq!(
             logging.get("level"),
-            Some(&Value::String("info".to_string()))
+            Some(&Value::string("info".to_string()))
         );
 
         let outputs = logging.get("outputs").unwrap().as_array().unwrap();
         // Array REPLACED (not merged)
         assert_eq!(outputs.len(), 1);
-        assert_eq!(outputs[0], Value::String("file".to_string()));
+        assert_eq!(outputs[0], Value::string("file".to_string()));
     } else {
         panic!("Root not object");
     }
@@ -151,17 +156,15 @@ pub trait ValueExt {
 
 impl ValueExt for Value {
     fn as_object(&self) -> Option<&indexmap::IndexMap<String, Value>> {
-        if let Value::Object(map) = self {
-            Some(map)
-        } else {
-            None
+        match &self.kind {
+            ValueKind::Object(map) => Some(map),
+            _ => None,
         }
     }
     fn as_array(&self) -> Option<&Vec<Value>> {
-        if let Value::Array(arr) = self {
-            Some(arr)
-        } else {
-            None
+        match &self.kind {
+            ValueKind::Array(arr) => Some(arr),
+            _ => None,
         }
     }
 }

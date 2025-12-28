@@ -1,4 +1,4 @@
-use crate::value::Value;
+use crate::value::{Value, ValueKind};
 use std::fmt;
 
 pub mod suggest;
@@ -43,18 +43,27 @@ fn validate_recursive(
 ) -> Result<(), ValidationItem> {
     // 1. Resolve Extended Schema Syntax: { type: "string", deprecated: "msg" }
     // If schema is an object with "type" key (and it's a string), treat it as extended definition.
-    let (effective_type_schema, deprecation) = if let Value::Object(schema_obj) = schema {
-        if let Some(Value::String(_)) = schema_obj.get("type") {
-            // It is an extended schema definition
-            let type_def = schema_obj.get("type").unwrap(); // We checked it exists
-            let deprecated_msg = if let Some(Value::String(msg)) = schema_obj.get("deprecated") {
-                Some(msg.clone())
+    let (effective_type_schema, deprecation) = if let ValueKind::Object(schema_obj) = &schema.kind {
+        if let Some(type_val) = schema_obj.get("type") {
+            if let ValueKind::String(_) = type_val.kind {
+                // It is an extended schema definition
+                let type_def = schema_obj.get("type").unwrap();
+                let deprecated_msg = if let Some(dep_val) = schema_obj.get("deprecated") {
+                    if let ValueKind::String(msg) = &dep_val.kind {
+                        Some(msg.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                (type_def, deprecated_msg)
             } else {
-                None
-            };
-            (type_def, deprecated_msg)
+                // "type" field exists but is not a string -> structural
+                (schema, None)
+            }
         } else {
-            // Just a structural object schema
+            // No "type" field -> structural
             (schema, None)
         }
     } else {
@@ -71,11 +80,11 @@ fn validate_recursive(
     }
 
     // 3. Validate Type / Structure
-    match effective_type_schema {
-        Value::String(type_name) => validate_type(instance, type_name, path, report),
+    match &effective_type_schema.kind {
+        ValueKind::String(type_name) => validate_type(instance, type_name, path, report),
 
-        Value::Object(schema_obj) => {
-            if let Value::Object(instance_obj) = instance {
+        ValueKind::Object(schema_obj) => {
+            if let ValueKind::Object(instance_obj) = &instance.kind {
                 // Check required fields
                 for (key, sub_schema) in schema_obj {
                     if !instance_obj.contains_key(key) {
@@ -123,7 +132,7 @@ fn validate_recursive(
             }
         }
 
-        Value::Array(schema_arr) => {
+        ValueKind::Array(schema_arr) => {
             if schema_arr.len() != 1 {
                 return Err(ValidationItem {
                     level: ValidationLevel::Error,
@@ -134,7 +143,7 @@ fn validate_recursive(
 
             let item_schema = &schema_arr[0];
 
-            if let Value::Array(instance_arr) = instance {
+            if let ValueKind::Array(instance_arr) = &instance.kind {
                 for (i, item) in instance_arr.iter().enumerate() {
                     validate_recursive(item, item_schema, &format!("{}[{}]", path, i), report)?;
                 }
@@ -169,12 +178,12 @@ fn validate_type(
     let actual_type = instance.type_name();
     let is_valid = match type_name {
         "any" => true,
-        "string" => matches!(instance, Value::String(_)),
-        "integer" => matches!(instance, Value::Integer(_)),
-        "float" => matches!(instance, Value::Float(_)),
-        "boolean" | "bool" => matches!(instance, Value::Bool(_)),
-        "null" => matches!(instance, Value::Null),
-        "number" => matches!(instance, Value::Integer(_) | Value::Float(_)),
+        "string" => matches!(instance.kind, ValueKind::String(_)),
+        "integer" => matches!(instance.kind, ValueKind::Integer(_)),
+        "float" => matches!(instance.kind, ValueKind::Float(_)),
+        "boolean" | "bool" => matches!(instance.kind, ValueKind::Bool(_)),
+        "null" => matches!(instance.kind, ValueKind::Null),
+        "number" => matches!(instance.kind, ValueKind::Integer(_) | ValueKind::Float(_)),
         _ => {
             return Err(ValidationItem {
                 level: ValidationLevel::Error,

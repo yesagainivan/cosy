@@ -2,7 +2,8 @@
 //!
 //! Run with: cargo run --example multi_load
 
-use cosy::{Value, load_and_merge};
+use cosy::load_and_merge;
+use cosy::value::{Value, ValueKind};
 use std::fs;
 use tempfile::tempdir;
 
@@ -50,15 +51,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n--- Merged Configuration ---");
     // Pretty print the result
     // (In a real app, you'd deserialize this into a struct)
-    if let Value::Object(root) = &config {
+    if let ValueKind::Object(root) = &config.kind {
         println!("App Name: {}", root.get("app_name").unwrap());
 
-        let server = root.get("server").unwrap().as_object().unwrap();
-        println!(
-            "Server: {{ host: {}, port: {} }}",
-            server.get("host").unwrap(),
-            server.get("port").unwrap()
-        );
+        let server_val = root.get("server").unwrap();
+        if let Some(server) = server_val.as_object() {
+            println!(
+                "Server: {{ host: {}, port: {} }}",
+                server.get("host").unwrap(),
+                server.get("port").unwrap()
+            );
+        } else {
+            println!("Server is not an object");
+        }
 
         println!("Debug Mode: {}", root.get("debug").unwrap());
     }
@@ -72,10 +77,9 @@ trait ValueExt {
 
 impl ValueExt for Value {
     fn as_object(&self) -> Option<&indexmap::IndexMap<String, Value>> {
-        if let Value::Object(map) = self {
-            Some(map)
-        } else {
-            None
+        match &self.kind {
+            ValueKind::Object(map) => Some(map),
+            _ => None,
         }
     }
 }

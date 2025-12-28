@@ -1,6 +1,6 @@
 use crate::merge;
 use crate::syntax::parser;
-use crate::value::Value;
+use crate::value::{Value, ValueKind};
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -68,11 +68,16 @@ fn resolve_recursive(
         return Err(IncludeError::RecursionLimitExceeded);
     }
 
-    match value {
-        Value::Object(map) => {
+    match &mut value.kind {
+        ValueKind::Object(map) => {
             // Check for "include" key
             // We remove it so it doesn't end up in the final config
-            if let Some(Value::String(include_path_str)) = map.shift_remove("include") {
+            if let Some(include_val) = map.shift_remove("include") {
+                let include_path_str = if let ValueKind::String(s) = include_val.kind {
+                    s
+                } else {
+                    return Ok(()); // Or error? Original code only matched String.
+                };
                 // 1. Resolve path
                 let include_path = base_path.join(&include_path_str);
 
@@ -86,7 +91,9 @@ fn resolve_recursive(
 
                 // 4. Merge
                 // The included value MUST be an object to merge into our current object
-                if let Value::Object(included_map) = included_value {
+                // 4. Merge
+                // The included value MUST be an object to merge into our current object
+                if let ValueKind::Object(included_map) = included_value.kind {
                     // We merge CURRENT fields INTO included map.
                     // Local fields override included fields.
                     // We merge included map INTO current map.
@@ -103,13 +110,17 @@ fn resolve_recursive(
                     // 1. Let's swap the content so included_map becomes the base for our final result
                     // We can move all items from map into included_map using merge,
                     // treating `included_map` as BASE and `map` as OVERRIDE.
-                    let local_overrides = Value::Object(std::mem::take(map));
-                    let mut base_included = Value::Object(included_map);
+                    // 1. Let's swap the content so included_map becomes the base for our final result
+                    // We can move all items from map into included_map using merge,
+                    // treating `included_map` as BASE and `map` as OVERRIDE.
+                    let local_overrides = Value::from(ValueKind::Object(std::mem::take(map)));
+                    let mut base_included = Value::from(ValueKind::Object(included_map));
 
                     merge::merge(&mut base_included, local_overrides);
 
                     // 2. Now put the result back into `map` (which is `value`'s internal map)
-                    if let Value::Object(merged_map) = base_included {
+                    // 2. Now put the result back into `map` (which is `value`'s internal map)
+                    if let ValueKind::Object(merged_map) = base_included.kind {
                         *map = merged_map;
                     }
                 } else {
@@ -126,7 +137,7 @@ fn resolve_recursive(
                 }
             }
         }
-        Value::Array(arr) => {
+        ValueKind::Array(arr) => {
             for v in arr {
                 resolve_recursive(v, base_path, depth)?;
             }

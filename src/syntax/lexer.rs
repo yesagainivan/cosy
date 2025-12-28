@@ -39,6 +39,7 @@ pub enum Token {
     True,
     False,
     Null,
+    Comment(String),
 
     // Symbols
     LeftBrace,    // {
@@ -63,6 +64,7 @@ impl fmt::Display for Token {
             Token::True => write!(f, "true"),
             Token::False => write!(f, "false"),
             Token::Null => write!(f, "null"),
+            Token::Comment(s) => write!(f, "// {}", s),
             Token::LeftBrace => write!(f, "{{"),
             Token::RightBrace => write!(f, "}}"),
             Token::LeftBracket => write!(f, "["),
@@ -119,7 +121,7 @@ impl Lexer {
         let mut tokens = Vec::new();
 
         loop {
-            self.skip_whitespace_and_comments();
+            self.skip_whitespace();
 
             if self.is_at_end() {
                 tokens.push(TokenWithPos::new(
@@ -147,6 +149,7 @@ impl Lexer {
                 self.advance();
                 Ok(Token::Newline)
             }
+            '/' if self.peek_next() == Some('/') => self.lex_comment(),
             '{' => {
                 self.advance();
                 Ok(Token::LeftBrace)
@@ -397,18 +400,11 @@ impl Lexer {
         }
     }
 
-    /// Skip whitespace and comments - FIXED to not double-count newlines
-    fn skip_whitespace_and_comments(&mut self) {
+    /// Skip whitespace only
+    fn skip_whitespace(&mut self) {
         while !self.is_at_end() {
             match self.current_char() {
                 ' ' | '\t' | '\r' => self.advance(),
-                '/' if self.peek_next() == Some('/') => {
-                    // Skip comment until end of line
-                    while !self.is_at_end() && self.current_char() != '\n' {
-                        self.advance();
-                    }
-                    // Don't consume the newline itself; let the next iteration handle it
-                }
                 _ => break,
             }
         }
@@ -430,6 +426,21 @@ impl Lexer {
         } else {
             None
         }
+    }
+
+    /// Lex a comment
+    fn lex_comment(&mut self) -> Result<Token, LexError> {
+        // consumes //
+        self.advance();
+        self.advance();
+
+        let start = self.position;
+        while !self.is_at_end() && self.current_char() != '\n' {
+            self.advance();
+        }
+
+        let comment: String = self.input[start..self.position].iter().collect();
+        Ok(Token::Comment(comment.trim().to_string()))
     }
 
     /// Move to the next character - SINGLE SOURCE OF TRUTH for position tracking

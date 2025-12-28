@@ -1,7 +1,8 @@
 // src/serde_support.rs
 pub mod serializer;
 
-use crate::{CosynError, Value};
+use crate::CosynError;
+use crate::value::{Value, ValueKind};
 use indexmap::IndexMap;
 use serde::de::{self, Error as DeError, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Error as SeError, SerializeMap};
@@ -97,14 +98,14 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Null => visitor.visit_unit(),
-            Value::Bool(b) => visitor.visit_bool(b),
-            Value::Integer(i) => visitor.visit_i64(i),
-            Value::Float(f) => visitor.visit_f64(f),
-            Value::String(s) => visitor.visit_string(s),
-            Value::Array(arr) => visitor.visit_seq(SeqDeserializer::new(arr)),
-            Value::Object(obj) => visitor.visit_map(MapDeserializer::new(obj)),
+        match self.value.kind {
+            ValueKind::Null => visitor.visit_unit(),
+            ValueKind::Bool(b) => visitor.visit_bool(b),
+            ValueKind::Integer(i) => visitor.visit_i64(i),
+            ValueKind::Float(f) => visitor.visit_f64(f),
+            ValueKind::String(s) => visitor.visit_string(s),
+            ValueKind::Array(arr) => visitor.visit_seq(SeqDeserializer::new(arr)),
+            ValueKind::Object(obj) => visitor.visit_map(MapDeserializer::new(obj)),
         }
     }
 
@@ -112,8 +113,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Bool(b) => visitor.visit_bool(b),
+        match self.value.kind {
+            ValueKind::Bool(b) => visitor.visit_bool(b),
             _ => Err(DeserializeError::custom("expected bool")),
         }
     }
@@ -122,8 +123,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Integer(i) => visitor.visit_i64(i),
+        match self.value.kind {
+            ValueKind::Integer(i) => visitor.visit_i64(i),
             _ => Err(DeserializeError::custom("expected integer")),
         }
     }
@@ -132,8 +133,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Integer(i) => {
+        match self.value.kind {
+            ValueKind::Integer(i) => {
                 if i >= 0 {
                     visitor.visit_u64(i as u64)
                 } else {
@@ -148,9 +149,9 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Float(f) => visitor.visit_f64(f),
-            Value::Integer(i) => visitor.visit_f64(i as f64),
+        match self.value.kind {
+            ValueKind::Float(f) => visitor.visit_f64(f),
+            ValueKind::Integer(i) => visitor.visit_f64(i as f64),
             _ => Err(DeserializeError::custom("expected number")),
         }
     }
@@ -159,8 +160,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::String(s) => visitor.visit_string(s),
+        match self.value.kind {
+            ValueKind::String(s) => visitor.visit_string(s),
             _ => Err(DeserializeError::custom("expected string")),
         }
     }
@@ -169,8 +170,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::String(s) => visitor.visit_string(s),
+        match self.value.kind {
+            ValueKind::String(s) => visitor.visit_string(s),
             _ => Err(DeserializeError::custom("expected string")),
         }
     }
@@ -179,8 +180,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Array(arr) => visitor.visit_seq(SeqDeserializer::new(arr)),
+        match self.value.kind {
+            ValueKind::Array(arr) => visitor.visit_seq(SeqDeserializer::new(arr)),
             _ => Err(DeserializeError::custom("expected array")),
         }
     }
@@ -189,8 +190,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Object(obj) => visitor.visit_map(MapDeserializer::new(obj)),
+        match self.value.kind {
+            ValueKind::Object(obj) => visitor.visit_map(MapDeserializer::new(obj)),
             _ => Err(DeserializeError::custom("expected object")),
         }
     }
@@ -204,8 +205,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Object(obj) => visitor.visit_map(MapDeserializer::new(obj)),
+        match self.value.kind {
+            ValueKind::Object(obj) => visitor.visit_map(MapDeserializer::new(obj)),
             _ => Err(DeserializeError::custom("expected object")),
         }
     }
@@ -219,9 +220,9 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::String(s) => visitor.visit_enum(UnitVariantDeserializer { value: s }),
-            Value::Object(obj) => {
+        match self.value.kind {
+            ValueKind::String(s) => visitor.visit_enum(UnitVariantDeserializer { value: s }),
+            ValueKind::Object(obj) => {
                 if obj.len() == 1 {
                     let (key, val) = obj.into_iter().next().unwrap();
                     visitor.visit_enum(NewtypeVariantDeserializer { key, value: val })
@@ -241,9 +242,9 @@ impl<'de> Deserializer<'de> for ValueDeserializer {
     where
         V: Visitor<'de>,
     {
-        match self.value {
-            Value::Null => visitor.visit_none(),
-            other => visitor.visit_some(ValueDeserializer::new(other)),
+        match self.value.kind {
+            ValueKind::Null => visitor.visit_none(),
+            _ => visitor.visit_some(ValueDeserializer::new(self.value)),
         }
     }
 
@@ -310,7 +311,7 @@ impl<'de> MapAccess<'de> for MapDeserializer {
         match self.iter.next() {
             Some((key, value)) => {
                 self.value = Some(value);
-                seed.deserialize(ValueDeserializer::new(Value::String(key)))
+                seed.deserialize(ValueDeserializer::new(Value::from(ValueKind::String(key))))
                     .map(Some)
             }
             None => Ok(None),
@@ -340,7 +341,9 @@ impl<'de> de::EnumAccess<'de> for UnitVariantDeserializer {
     where
         V: de::DeserializeSeed<'de>,
     {
-        let val = seed.deserialize(ValueDeserializer::new(Value::String(self.value.clone())))?;
+        let val = seed.deserialize(ValueDeserializer::new(Value::from(ValueKind::String(
+            self.value.clone(),
+        ))))?;
         Ok((val, self))
     }
 }
@@ -396,7 +399,7 @@ impl<'de> de::EnumAccess<'de> for NewtypeVariantDeserializer {
         V: de::DeserializeSeed<'de>,
     {
         let key = std::mem::take(&mut self.key);
-        let val = seed.deserialize(ValueDeserializer::new(Value::String(key)))?;
+        let val = seed.deserialize(ValueDeserializer::new(Value::from(ValueKind::String(key))))?;
         Ok((val, self))
     }
 }
@@ -458,65 +461,67 @@ impl Serializer for ValueSerializer {
     type SerializeStructVariant = SerializeObject;
 
     fn serialize_bool(self, v: bool) -> Result<Value, SerializeError> {
-        Ok(Value::Bool(v))
+        Ok(Value::from(ValueKind::Bool(v)))
     }
 
     fn serialize_i8(self, v: i8) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_i16(self, v: i16) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_i32(self, v: i32) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_i64(self, v: i64) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v))
+        Ok(Value::from(ValueKind::Integer(v)))
     }
 
     fn serialize_u8(self, v: u8) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_u16(self, v: u16) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_u32(self, v: u32) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_u64(self, v: u64) -> Result<Value, SerializeError> {
-        Ok(Value::Integer(v as i64))
+        Ok(Value::from(ValueKind::Integer(v as i64)))
     }
 
     fn serialize_f32(self, v: f32) -> Result<Value, SerializeError> {
-        Ok(Value::Float(v as f64))
+        Ok(Value::from(ValueKind::Float(v as f64)))
     }
 
     fn serialize_f64(self, v: f64) -> Result<Value, SerializeError> {
-        Ok(Value::Float(v))
+        Ok(Value::from(ValueKind::Float(v)))
     }
 
     fn serialize_char(self, v: char) -> Result<Value, SerializeError> {
-        Ok(Value::String(v.to_string()))
+        Ok(Value::from(ValueKind::String(v.to_string())))
     }
 
     fn serialize_str(self, v: &str) -> Result<Value, SerializeError> {
-        Ok(Value::String(v.to_string()))
+        Ok(Value::from(ValueKind::String(v.to_string())))
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Value, SerializeError> {
-        Ok(Value::Array(
-            v.iter().map(|b| Value::Integer(*b as i64)).collect(),
-        ))
+        Ok(Value::from(ValueKind::Array(
+            v.iter()
+                .map(|b| Value::from(ValueKind::Integer(*b as i64)))
+                .collect(),
+        )))
     }
 
     fn serialize_none(self) -> Result<Value, SerializeError> {
-        Ok(Value::Null)
+        Ok(Value::from(ValueKind::Null))
     }
 
     fn serialize_some<T>(self, value: &T) -> Result<Value, SerializeError>
@@ -527,11 +532,11 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_unit(self) -> Result<Value, SerializeError> {
-        Ok(Value::Null)
+        Ok(Value::from(ValueKind::Null))
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Value, SerializeError> {
-        Ok(Value::Null)
+        Ok(Value::from(ValueKind::Null))
     }
 
     fn serialize_unit_variant(
@@ -540,7 +545,7 @@ impl Serializer for ValueSerializer {
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Value, SerializeError> {
-        Ok(Value::String(variant.to_string()))
+        Ok(Value::from(ValueKind::String(variant.to_string())))
     }
 
     fn serialize_newtype_struct<T>(
@@ -566,7 +571,7 @@ impl Serializer for ValueSerializer {
     {
         let mut map = IndexMap::new();
         map.insert(variant.to_string(), value.serialize(self)?);
-        Ok(Value::Object(map))
+        Ok(Value::from(ValueKind::Object(map)))
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<SerializeArray, SerializeError> {
@@ -599,7 +604,7 @@ impl Serializer for ValueSerializer {
 
     fn serialize_map(self, len: Option<usize>) -> Result<SerializeObject, SerializeError> {
         Ok(SerializeObject {
-            object: IndexMap::with_capacity(len.unwrap_or(0)), // Changed from HashMap
+            object: IndexMap::with_capacity(len.unwrap_or(0)),
             next_key: None,
         })
     }
@@ -620,7 +625,7 @@ impl Serializer for ValueSerializer {
         len: usize,
     ) -> Result<SerializeObject, SerializeError> {
         Ok(SerializeObject {
-            object: IndexMap::with_capacity(len), // Changed from HashMap
+            object: IndexMap::with_capacity(len),
             next_key: Some(variant.to_string()),
         })
     }
@@ -643,7 +648,7 @@ impl serde::ser::SerializeSeq for SerializeArray {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Array(self.array))
+        Ok(Value::array(self.array))
     }
 }
 
@@ -660,7 +665,7 @@ impl serde::ser::SerializeTuple for SerializeArray {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Array(self.array))
+        Ok(Value::array(self.array))
     }
 }
 
@@ -677,7 +682,7 @@ impl serde::ser::SerializeTupleStruct for SerializeArray {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Array(self.array))
+        Ok(Value::array(self.array))
     }
 }
 
@@ -694,7 +699,7 @@ impl serde::ser::SerializeTupleVariant for SerializeArray {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Array(self.array))
+        Ok(Value::array(self.array))
     }
 }
 
@@ -711,8 +716,8 @@ impl SerializeMap for SerializeObject {
     where
         T: Serialize + ?Sized,
     {
-        self.next_key = Some(match key.serialize(ValueSerializer)? {
-            Value::String(s) => s,
+        self.next_key = Some(match key.serialize(ValueSerializer)?.kind {
+            ValueKind::String(s) => s,
             _ => return Err(SerializeError::custom("keys must be strings")),
         });
         Ok(())
@@ -733,7 +738,7 @@ impl SerializeMap for SerializeObject {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Object(self.object))
+        Ok(Value::object(self.object))
     }
 }
 
@@ -751,7 +756,7 @@ impl serde::ser::SerializeStruct for SerializeObject {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Object(self.object))
+        Ok(Value::object(self.object))
     }
 }
 
@@ -769,6 +774,6 @@ impl serde::ser::SerializeStructVariant for SerializeObject {
     }
 
     fn end(self) -> Result<Value, SerializeError> {
-        Ok(Value::Object(self.object))
+        Ok(Value::object(self.object))
     }
 }

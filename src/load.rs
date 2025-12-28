@@ -1,5 +1,5 @@
 use crate::error::CosynError;
-use crate::value::Value;
+use crate::value::{Value, ValueKind};
 use std::path::Path;
 
 /// Load and merge multiple configuration files.
@@ -20,7 +20,7 @@ use std::path::Path;
 /// let config = load_and_merge(&paths).unwrap();
 /// ```
 pub fn load_and_merge(paths: &[&Path]) -> Result<Value, CosynError> {
-    let mut merged = Value::Object(indexmap::IndexMap::new());
+    let mut merged = Value::from(ValueKind::Object(indexmap::IndexMap::new()));
 
     for path in paths {
         let content = std::fs::read_to_string(path).map_err(|e| CosynError::Io(e.to_string()))?;
