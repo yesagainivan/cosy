@@ -212,7 +212,7 @@ COSY has **first-class Serde support** via `cosy::serde_support`, allowing you t
 
 ```rust
 use serde::{Deserialize, Serialize};
-use cosy::serde_support;
+use cosy::serde;
 
 #[derive(Serialize, Deserialize)]
 struct Config {
@@ -228,10 +228,10 @@ let cosy_text = r#"{
 }"#;
 
 // Deserialize
-let config: Config = serde_support::from_str(cosy_text)?;
+let config: Config = serde::from_str(cosy_text)?;
 
 // Serialize
-let serialized = serde_support::to_string(&config)?;
+let serialized = serde::to_string(&config)?;
 println!("{}", serialized);
 ```
 
@@ -381,7 +381,7 @@ This helps users quickly locate and fix issues in their configuration files.
 Deserialization errors include the type mismatch details:
 
 ```rust
-let result: Result<Config, _> = serde_support::from_str("{ port: \"not a number\" }");
+let result: Result<Config, _> = serde::from_str("{ port: \"not a number\" }");
 // Error: Deserialization error: expected integer
 ```
 
