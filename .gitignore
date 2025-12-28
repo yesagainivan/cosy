@@ -15,3 +15,7 @@
 # Ignore other files
 *.DS_Store
 
+# Agents folders
+
+.gemini
+.agent
