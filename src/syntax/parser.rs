@@ -100,14 +100,14 @@ impl Parser {
     /// Expect a specific token, advance if found
     fn expect(&mut self, expected: Token, message: &str) -> Result<(), ParseError> {
         let current = self.current_token();
-        let matches = match (&current, &expected) {
-            (Token::LeftBrace, Token::LeftBrace) => true,
-            (Token::RightBrace, Token::RightBrace) => true,
-            (Token::LeftBracket, Token::LeftBracket) => true,
-            (Token::RightBracket, Token::RightBracket) => true,
-            (Token::Colon, Token::Colon) => true,
-            _ => false,
-        };
+        let matches = matches!(
+            (&current, &expected),
+            (Token::LeftBrace, Token::LeftBrace)
+                | (Token::RightBrace, Token::RightBrace)
+                | (Token::LeftBracket, Token::LeftBracket)
+                | (Token::RightBracket, Token::RightBracket)
+                | (Token::Colon, Token::Colon)
+        );
 
         if matches {
             self.advance();

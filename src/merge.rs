@@ -21,8 +21,8 @@ pub fn merge(base: &mut Value, override_val: Value) {
 
     if base_is_obj && override_is_obj {
         // Both match, we must destructure both and merge.
-        if let ValueKind::Object(base_map) = &mut base.kind {
-            if let ValueKind::Object(override_map) = override_kind {
+        if let ValueKind::Object(base_map) = &mut base.kind
+            && let ValueKind::Object(override_map) = override_kind {
                 for (k, v) in override_map {
                     if let Some(base_v) = base_map.get_mut(&k) {
                         merge(base_v, v);
@@ -31,7 +31,6 @@ pub fn merge(base: &mut Value, override_val: Value) {
                     }
                 }
             }
-        }
     } else {
         // Just replace
         *base = Value {

@@ -28,6 +28,12 @@ pub struct Serializer {
     indent_level: usize,
 }
 
+impl Default for Serializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Serializer {
     /// Create a new serializer with default options
     pub fn new() -> Self {
