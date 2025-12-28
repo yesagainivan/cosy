@@ -1,5 +1,5 @@
 use cosy::serde::from_value;
-use cosy::value::{Value, ValueKind};
+use cosy::value::Value;
 use serde::Deserialize;
 
 #[test]

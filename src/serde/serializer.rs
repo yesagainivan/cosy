@@ -160,12 +160,21 @@ impl Serializer {
 
             let keys: Vec<_> = obj.keys().collect();
             for (i, key) in keys.iter().enumerate() {
+                let value = &obj[*key];
+
+                // Print comments before the key
+                for comment in &value.comments {
+                    result.push_str(&self.indent());
+                    result.push_str("// ");
+                    result.push_str(comment);
+                    result.push('\n');
+                }
+
                 result.push_str(&self.indent());
                 result.push_str(key);
                 result.push_str(": ");
 
-                let value = &obj[*key];
-                result.push_str(&self.serialize_value(value));
+                result.push_str(&self.serialize_value_kind(&value.kind));
 
                 if i < keys.len() - 1 {
                     result.push(',');
@@ -184,9 +193,17 @@ impl Serializer {
             // Single line for compact output
             let keys: Vec<_> = obj.keys().collect();
             for (i, key) in keys.iter().enumerate() {
+                let value = &obj[*key];
+
+                for comment in &value.comments {
+                    result.push_str("// ");
+                    result.push_str(comment);
+                    result.push('\n'); // Forced newline for comment
+                }
+
                 result.push_str(key);
                 result.push_str(": ");
-                result.push_str(&self.serialize_value(&obj[*key]));
+                result.push_str(&self.serialize_value_kind(&value.kind));
 
                 if i < keys.len() - 1 {
                     result.push_str(", ");

@@ -1,6 +1,7 @@
 use crate::merge;
 use crate::syntax::parser;
 use crate::value::{Value, ValueKind};
+use indexmap::IndexMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -70,52 +71,56 @@ fn resolve_recursive(
 
     match &mut value.kind {
         ValueKind::Object(map) => {
-            // Check for "include" key
-            // We remove it so it doesn't end up in the final config
-            if let Some(include_val) = map.shift_remove("include") {
-                let include_path_str = if let ValueKind::String(s) = include_val.kind {
+            // 1. Identify and remove directives
+            let extends_val = map.shift_remove("extends");
+            let include_val = map.shift_remove("include");
+
+            // 2. Resolve local fields (FIX for bug where local includes were ignored)
+            for (_, v) in map.iter_mut() {
+                resolve_recursive(v, base_path, depth)?;
+            }
+
+            // 3. Prepare Base (from `extends`)
+            let mut base_config = if let Some(val) = extends_val {
+                let path_str = if let ValueKind::String(s) = val.kind {
                     s
                 } else {
-                    return Ok(()); // Or error? Original code only matched String.
+                    return Err(IncludeError::InvalidIncludeTarget(format!(
+                        "Extends value must be a string, found {}",
+                        val.type_name()
+                    )));
                 };
-                // 1. Resolve path
-                let include_path = base_path.join(&include_path_str);
+                load_and_resolve(&path_str, base_path, depth)?
+            } else {
+                Value::object(IndexMap::new())
+            };
 
-                // 2. Read and Parse
-                let file_content = fs::read_to_string(&include_path)?;
-                let mut included_value = parser::from_str(&file_content)?;
-
-                // 3. Recursive resolve on the INCLUDED content (using its own directory as base)
-                let new_base = include_path.parent().unwrap_or(Path::new("."));
-                resolve_recursive(&mut included_value, new_base, depth + 1)?;
-
-                // 4. Merge
-                // The included value MUST be an object to merge into our current object
-                if let ValueKind::Object(included_map) = included_value.kind {
-                    // Merge strategy: Local Config > Included Config.
-                    // We treat `included_map` as the BASE and `map` (containing local fields) as the OVERRIDE.
-                    // This ensures that local settings take precedence over included defaults.
-                    let local_overrides = Value::from(ValueKind::Object(std::mem::take(map)));
-                    let mut base_included = Value::from(ValueKind::Object(included_map));
-
-                    merge::merge(&mut base_included, local_overrides);
-
-                    // 2. Now put the result back into `map` (which is `value`'s internal map)
-                    if let ValueKind::Object(merged_map) = base_included.kind {
-                        *map = merged_map;
-                    }
+            // 4. Prepare Mixin (from `include`) and merge into Base
+            if let Some(val) = include_val {
+                let path_str = if let ValueKind::String(s) = val.kind {
+                    s
                 } else {
                     return Err(IncludeError::InvalidIncludeTarget(format!(
-                        "Included file '{}' must be an Object, found {}",
-                        include_path_str,
-                        included_value.type_name()
+                        "Include value must be a string, found {}",
+                        val.type_name()
                     )));
-                }
-            } else {
-                // No include at this level, but check children
-                for (_, v) in map.iter_mut() {
-                    resolve_recursive(v, base_path, depth)?;
-                }
+                };
+                let mixin_config = load_and_resolve(&path_str, base_path, depth)?;
+
+                // Merge Mixin INTO Base (Mixin overrides Base)
+                // Note: Standard `include` might expect to override `extends`?
+                // Yes, extends is deepest base. Include is like a trait/mixin on top.
+                merge::merge(&mut base_config, mixin_config);
+            }
+
+            // 5. Merge Local (current map) INTO Base (Local overrides Base+Mixin)
+            // We take the local map out, wrap it in a Value, merge it into base_config.
+            let local_overrides = Value::from(ValueKind::Object(std::mem::take(map)));
+            merge::merge(&mut base_config, local_overrides);
+
+            // 6. Put the result back into `value`
+            if let ValueKind::Object(merged_map) = base_config.kind {
+                *map = merged_map;
             }
         }
         ValueKind::Array(arr) => {
@@ -127,4 +132,23 @@ fn resolve_recursive(
     }
 
     Ok(())
+}
+
+fn load_and_resolve(path_str: &str, base_path: &Path, depth: usize) -> Result<Value, IncludeError> {
+    let include_path = base_path.join(path_str);
+    let file_content = fs::read_to_string(&include_path)?;
+    let mut loaded_value = parser::from_str(&file_content)?;
+
+    let new_base = include_path.parent().unwrap_or(Path::new("."));
+    resolve_recursive(&mut loaded_value, new_base, depth + 1)?;
+
+    if let ValueKind::Object(_) = loaded_value.kind {
+        Ok(loaded_value)
+    } else {
+        Err(IncludeError::InvalidIncludeTarget(format!(
+            "Included/Extended file '{}' must be an Object, found {}",
+            path_str,
+            loaded_value.type_name()
+        )))
+    }
 }

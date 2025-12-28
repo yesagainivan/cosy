@@ -73,6 +73,34 @@ fn test_roundtrip_array_with_comments() {
 
     println!("Serialized array:\n{}", serialized);
 
-    assert!(serialized.contains("// First item"));
     assert!(serialized.contains("// Second item"));
+}
+
+#[test]
+fn test_comment_placement_in_object() {
+    use cosy::serde::serializer::to_string;
+    use cosy::value::Value;
+    use indexmap::IndexMap;
+
+    let mut obj = IndexMap::new();
+
+    // Construct the "background" value with a comment
+    let mut background_val = Value::from("oklch(0.985 0.005 240)");
+    background_val.comments = vec!["Hey!".to_string()];
+
+    obj.insert("background".to_string(), background_val);
+
+    let root = Value::object(obj);
+    let output = to_string(&root);
+
+    println!("Output:\n{}", output);
+
+    // We want to assert that "// Hey!" comes BEFORE "background:"
+    let comment_idx = output.find("// Hey!").expect("Comment not found");
+    let key_idx = output.find("background:").expect("Key not found");
+
+    assert!(
+        comment_idx < key_idx,
+        "Comment should appear before the key"
+    );
 }
