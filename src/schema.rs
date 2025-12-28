@@ -41,34 +41,8 @@ fn validate_recursive(
     path: &str,
     report: &mut ValidationReport,
 ) -> Result<(), ValidationItem> {
-    // 1. Resolve Extended Schema Syntax: { type: "string", deprecated: "msg" }
-    // If schema is an object with "type" key (and it's a string), treat it as extended definition.
-    let (effective_type_schema, deprecation) = if let ValueKind::Object(schema_obj) = &schema.kind {
-        if let Some(type_val) = schema_obj.get("type") {
-            if let ValueKind::String(_) = type_val.kind {
-                // It is an extended schema definition
-                let type_def = schema_obj.get("type").unwrap();
-                let deprecated_msg = if let Some(dep_val) = schema_obj.get("deprecated") {
-                    if let ValueKind::String(msg) = &dep_val.kind {
-                        Some(msg.clone())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                (type_def, deprecated_msg)
-            } else {
-                // "type" field exists but is not a string -> structural
-                (schema, None)
-            }
-        } else {
-            // No "type" field -> structural
-            (schema, None)
-        }
-    } else {
-        (schema, None)
-    };
+    // 1. Resolve Extended Schema Syntax: { type: "string", deprecated: "msg", optional: true }
+    let (effective_type_schema, deprecation, _) = extract_metadata(schema);
 
     // 2. Report Deprecation Warning if applicable
     if let Some(msg) = deprecation {
@@ -88,11 +62,14 @@ fn validate_recursive(
                 // Check required fields
                 for (key, sub_schema) in schema_obj {
                     if !instance_obj.contains_key(key) {
-                        report.push(ValidationItem {
-                            level: ValidationLevel::Error,
-                            path: path.to_string(),
-                            message: format!("Missing required field '{}'", key),
-                        });
+                        let (_, _, is_optional) = extract_metadata(sub_schema);
+                        if !is_optional {
+                            report.push(ValidationItem {
+                                level: ValidationLevel::Error,
+                                path: path.to_string(),
+                                message: format!("Missing required field '{}'", key),
+                            });
+                        }
                     } else {
                         validate_recursive(
                             &instance_obj[key],
@@ -204,4 +181,38 @@ fn validate_type(
         });
     }
     Ok(())
+}
+
+fn extract_metadata(schema: &Value) -> (&Value, Option<String>, bool) {
+    if let ValueKind::Object(schema_obj) = &schema.kind {
+        if let Some(type_val) = schema_obj.get("type") {
+            if let ValueKind::String(_) = type_val.kind {
+                // Extended schema definition
+                let type_def = schema_obj.get("type").unwrap();
+
+                let deprecated_msg = if let Some(dep_val) = schema_obj.get("deprecated") {
+                    if let ValueKind::String(msg) = &dep_val.kind {
+                        Some(msg.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let optional = if let Some(opt_val) = schema_obj.get("optional") {
+                    if let ValueKind::Bool(b) = &opt_val.kind {
+                        *b
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                return (type_def, deprecated_msg, optional);
+            }
+        }
+    }
+    (schema, None, false)
 }
